@@ -26,8 +26,14 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
   },
 });
 
+import { ConversationsModule } from './conversations/conversations.module';
+
+import { MessagesModule } from './messages/messages.module';
+
 @Module({
   imports: [
+    MessagesModule,
+    ConversationsModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [databaseConfig, authConfig, appConfig, mailConfig, fileConfig],
