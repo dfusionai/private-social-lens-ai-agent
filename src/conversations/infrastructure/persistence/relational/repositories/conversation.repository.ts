@@ -27,28 +27,42 @@ export class ConversationRelationalRepository
 
   async findAllWithPagination({
     paginationOptions,
+    withDeleted = false,
   }: {
     paginationOptions: IPaginationOptions;
+    withDeleted?: boolean;
   }): Promise<Conversation[]> {
     const entities = await this.conversationRepository.find({
       skip: (paginationOptions.page - 1) * paginationOptions.limit,
       take: paginationOptions.limit,
+      order: {
+        createdAt: 'DESC',
+      },
+      withDeleted,
     });
 
     return entities.map((entity) => ConversationMapper.toDomain(entity));
   }
 
-  async findById(id: Conversation['id']): Promise<NullableType<Conversation>> {
+  async findById(
+    id: Conversation['id'],
+    withDeleted = false,
+  ): Promise<NullableType<Conversation>> {
     const entity = await this.conversationRepository.findOne({
       where: { id },
+      withDeleted,
     });
 
     return entity ? ConversationMapper.toDomain(entity) : null;
   }
 
-  async findByIds(ids: Conversation['id'][]): Promise<Conversation[]> {
+  async findByIds(
+    ids: Conversation['id'][],
+    withDeleted = false,
+  ): Promise<Conversation[]> {
     const entities = await this.conversationRepository.find({
       where: { id: In(ids) },
+      withDeleted,
     });
 
     return entities.map((entity) => ConversationMapper.toDomain(entity));
@@ -79,6 +93,14 @@ export class ConversationRelationalRepository
   }
 
   async remove(id: Conversation['id']): Promise<void> {
+    await this.conversationRepository.softDelete(id);
+  }
+
+  async restore(id: Conversation['id']): Promise<void> {
+    await this.conversationRepository.restore(id);
+  }
+
+  async hardDelete(id: Conversation['id']): Promise<void> {
     await this.conversationRepository.delete(id);
   }
 }
