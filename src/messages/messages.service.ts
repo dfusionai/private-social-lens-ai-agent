@@ -6,6 +6,8 @@ import {
   Injectable,
   HttpStatus,
   UnprocessableEntityException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { UpdateMessageDto } from './dto/update-message.dto';
@@ -16,6 +18,7 @@ import { Message } from './domain/message';
 @Injectable()
 export class MessagesService {
   constructor(
+    @Inject(forwardRef(() => ConversationsService))
     private readonly conversationService: ConversationsService,
 
     // Dependencies here

@@ -1,16 +1,15 @@
-import { ConversationsModule } from '../conversations/conversations.module';
 import {
   // do not remove this comment
   Module,
+  Global,
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
 import { RelationalMessagePersistenceModule } from './infrastructure/persistence/relational/relational-persistence.module';
 
+@Global()
 @Module({
   imports: [
-    ConversationsModule,
-
     // do not remove this comment
     RelationalMessagePersistenceModule,
   ],
