@@ -4,7 +4,7 @@ import {
   Global,
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
-import { MessagesController } from './messages.controller';
+// import { MessagesController } from './messages.controller';
 import { RelationalMessagePersistenceModule } from './infrastructure/persistence/relational/relational-persistence.module';
 
 @Global()
@@ -13,7 +13,7 @@ import { RelationalMessagePersistenceModule } from './infrastructure/persistence
     // do not remove this comment
     RelationalMessagePersistenceModule,
   ],
-  controllers: [MessagesController],
+  // controllers: [MessagesController],
   providers: [MessagesService],
   exports: [MessagesService, RelationalMessagePersistenceModule],
 })
