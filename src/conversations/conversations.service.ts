@@ -6,6 +6,7 @@ import {
   Injectable,
   HttpStatus,
   UnprocessableEntityException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
@@ -22,13 +23,17 @@ export class ConversationsService {
     private readonly conversationRepository: ConversationRepository,
   ) {}
 
-  async create(createConversationDto: CreateConversationDto) {
+  async create({
+    userId,
+    createConversationDto,
+  }: {
+    userId: User['id'];
+    createConversationDto: CreateConversationDto;
+  }) {
     // Do not remove comment below.
     // <creating-property />
 
-    const userObject = await this.userService.findById(
-      createConversationDto.user.id,
-    );
+    const userObject = await this.userService.findById(userId);
     if (!userObject) {
       throw new UnprocessableEntityException({
         status: HttpStatus.UNPROCESSABLE_ENTITY,
@@ -69,41 +74,64 @@ export class ConversationsService {
     return this.conversationRepository.findByIds(ids);
   }
 
-  async update(
-    id: Conversation['id'],
-
-    updateConversationDto: UpdateConversationDto,
-  ) {
+  async update({
+    id,
+    userId,
+    updateConversationDto,
+  }: {
+    id: Conversation['id'];
+    userId: User['id'];
+    updateConversationDto: UpdateConversationDto;
+  }) {
     // Do not remove comment below.
     // <updating-property />
 
-    let user: User | undefined = undefined;
+    const conversation = await this.findById(id);
+    if (!conversation) {
+      throw new UnprocessableEntityException({
+        status: HttpStatus.UNPROCESSABLE_ENTITY,
+        errors: {
+          conversation: 'notExists',
+        },
+      });
+    }
 
-    if (updateConversationDto.user) {
-      const userObject = await this.userService.findById(
-        updateConversationDto.user.id,
-      );
-      if (!userObject) {
-        throw new UnprocessableEntityException({
-          status: HttpStatus.UNPROCESSABLE_ENTITY,
-          errors: {
-            user: 'notExists',
-          },
-        });
-      }
-      user = userObject;
+    if (conversation.user.id !== userId) {
+      throw new ForbiddenException({
+        status: HttpStatus.FORBIDDEN,
+        errors: {
+          conversation: 'notOwner',
+        },
+      });
     }
 
     return this.conversationRepository.update(id, {
       // Do not remove comment below.
       // <updating-property-payload />
       title: updateConversationDto.title,
-
-      user,
     });
   }
 
-  remove(id: Conversation['id']) {
+  async remove({ id, userId }: { id: Conversation['id']; userId: User['id'] }) {
+    const conversation = await this.findById(id);
+    if (!conversation) {
+      throw new UnprocessableEntityException({
+        status: HttpStatus.UNPROCESSABLE_ENTITY,
+        errors: {
+          conversation: 'notExists',
+        },
+      });
+    }
+
+    if (conversation.user.id !== userId) {
+      throw new ForbiddenException({
+        status: HttpStatus.FORBIDDEN,
+        errors: {
+          conversation: 'notOwner',
+        },
+      });
+    }
+
     return this.conversationRepository.remove(id);
   }
 }

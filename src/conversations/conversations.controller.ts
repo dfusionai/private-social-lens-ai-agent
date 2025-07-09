@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Query,
+  Request,
 } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
@@ -27,6 +28,7 @@ import {
 } from '../utils/dto/infinity-pagination-response.dto';
 import { infinityPagination } from '../utils/infinity-pagination';
 import { FindAllConversationsDto } from './dto/find-all-conversations.dto';
+import { JwtPayloadType } from '../auth/strategies/types/jwt-payload.type';
 
 @ApiTags('Conversations')
 @ApiBearerAuth()
@@ -42,8 +44,14 @@ export class ConversationsController {
   @ApiCreatedResponse({
     type: Conversation,
   })
-  create(@Body() createConversationDto: CreateConversationDto) {
-    return this.conversationsService.create(createConversationDto);
+  create(
+    @Request() request: { user: JwtPayloadType },
+    @Body() createConversationDto: CreateConversationDto,
+  ) {
+    return this.conversationsService.create({
+      userId: request.user.id,
+      createConversationDto,
+    });
   }
 
   @Get()
@@ -92,11 +100,16 @@ export class ConversationsController {
   @ApiOkResponse({
     type: Conversation,
   })
-  update(
+  async update(
+    @Request() request: { user: JwtPayloadType },
     @Param('id') id: string,
     @Body() updateConversationDto: UpdateConversationDto,
   ) {
-    return this.conversationsService.update(id, updateConversationDto);
+    return this.conversationsService.update({
+      id,
+      userId: request.user.id,
+      updateConversationDto,
+    });
   }
 
   @Delete(':id')
@@ -105,7 +118,13 @@ export class ConversationsController {
     type: String,
     required: true,
   })
-  remove(@Param('id') id: string) {
-    return this.conversationsService.remove(id);
+  async remove(
+    @Request() request: { user: JwtPayloadType },
+    @Param('id') id: string,
+  ) {
+    return this.conversationsService.remove({
+      id,
+      userId: request.user.id,
+    });
   }
 }
