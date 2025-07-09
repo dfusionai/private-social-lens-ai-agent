@@ -66,6 +66,22 @@ export class MessagesService {
     });
   }
 
+  findByConversationWithPagination({
+    conversationId,
+    paginationOptions,
+  }: {
+    conversationId: Conversation['id'];
+    paginationOptions: IPaginationOptions;
+  }) {
+    return this.messageRepository.findByConversationWithPagination({
+      conversationId,
+      paginationOptions: {
+        page: paginationOptions.page,
+        limit: paginationOptions.limit,
+      },
+    });
+  }
+
   findById(id: Message['id']) {
     return this.messageRepository.findById(id);
   }

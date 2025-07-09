@@ -1,6 +1,7 @@
 import { UsersService } from '../users/users.service';
 import { User } from '../users/domain/user';
 import { MessagesService } from '../messages/messages.service';
+import { MessageResponseDto } from '../messages/dto/message-response.dto';
 
 import {
   // common
@@ -62,27 +63,11 @@ export class ConversationsService {
     let conversation: Conversation;
 
     if (chatDto.conversationId) {
-      // Check if conversation exists and user owns it
-      const existingConversation = await this.findById(chatDto.conversationId);
-      if (!existingConversation) {
-        throw new UnprocessableEntityException({
-          status: HttpStatus.UNPROCESSABLE_ENTITY,
-          errors: {
-            conversation: 'notExists',
-          },
-        });
-      }
-
-      if (existingConversation.user.id !== userId) {
-        throw new ForbiddenException({
-          status: HttpStatus.FORBIDDEN,
-          errors: {
-            conversation: 'notOwner',
-          },
-        });
-      }
-
-      conversation = existingConversation;
+      // Validate conversation exists and user owns it
+      conversation = await this.validateConversationOwnership({
+        conversationId: chatDto.conversationId,
+        userId,
+      });
     } else {
       // Create new conversation
       conversation = await this.create({
@@ -196,6 +181,58 @@ export class ConversationsService {
     return this.conversationRepository.findByIds(ids);
   }
 
+  private async validateConversationOwnership({
+    conversationId,
+    userId,
+  }: {
+    conversationId: Conversation['id'];
+    userId: User['id'];
+  }): Promise<Conversation> {
+    const conversation = await this.findById(conversationId);
+    if (!conversation) {
+      throw new UnprocessableEntityException({
+        status: HttpStatus.UNPROCESSABLE_ENTITY,
+        errors: {
+          conversation: 'notExists',
+        },
+      });
+    }
+
+    if (conversation.user.id !== userId) {
+      throw new ForbiddenException({
+        status: HttpStatus.FORBIDDEN,
+        errors: {
+          conversation: 'notOwner',
+        },
+      });
+    }
+
+    return conversation;
+  }
+
+  async findMessagesByConversationWithPagination({
+    conversationId,
+    userId,
+    paginationOptions,
+  }: {
+    conversationId: Conversation['id'];
+    userId: User['id'];
+    paginationOptions: IPaginationOptions;
+  }) {
+    // Validate conversation exists and user owns it
+    await this.validateConversationOwnership({ conversationId, userId });
+
+    // Get messages for the conversation
+    const messages =
+      await this.messagesService.findByConversationWithPagination({
+        conversationId,
+        paginationOptions,
+      });
+
+    // Transform messages to response format
+    return messages.map((message) => new MessageResponseDto(message));
+  }
+
   async update({
     id,
     userId,
@@ -208,24 +245,11 @@ export class ConversationsService {
     // Do not remove comment below.
     // <updating-property />
 
-    const conversation = await this.findById(id);
-    if (!conversation) {
-      throw new UnprocessableEntityException({
-        status: HttpStatus.UNPROCESSABLE_ENTITY,
-        errors: {
-          conversation: 'notExists',
-        },
-      });
-    }
-
-    if (conversation.user.id !== userId) {
-      throw new ForbiddenException({
-        status: HttpStatus.FORBIDDEN,
-        errors: {
-          conversation: 'notOwner',
-        },
-      });
-    }
+    // Validate conversation exists and user owns it
+    await this.validateConversationOwnership({
+      conversationId: id,
+      userId,
+    });
 
     return this.conversationRepository.update(id, {
       // Do not remove comment below.
@@ -235,24 +259,11 @@ export class ConversationsService {
   }
 
   async remove({ id, userId }: { id: Conversation['id']; userId: User['id'] }) {
-    const conversation = await this.findById(id);
-    if (!conversation) {
-      throw new UnprocessableEntityException({
-        status: HttpStatus.UNPROCESSABLE_ENTITY,
-        errors: {
-          conversation: 'notExists',
-        },
-      });
-    }
-
-    if (conversation.user.id !== userId) {
-      throw new ForbiddenException({
-        status: HttpStatus.FORBIDDEN,
-        errors: {
-          conversation: 'notOwner',
-        },
-      });
-    }
+    // Validate conversation exists and user owns it
+    await this.validateConversationOwnership({
+      conversationId: id,
+      userId,
+    });
 
     return this.conversationRepository.remove(id);
   }

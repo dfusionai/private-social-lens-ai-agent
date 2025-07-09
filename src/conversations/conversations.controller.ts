@@ -16,6 +16,7 @@ import { CreateConversationDto } from './dto/create-conversation.dto';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
 import { ChatDto } from './dto/chat.dto';
 import { ChatResponseDto } from './dto/chat-response.dto';
+import { FindConversationMessagesDto } from './dto/find-conversation-messages.dto';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -35,6 +36,7 @@ import { infinityPagination } from '../utils/infinity-pagination';
 import { FindAllConversationsDto } from './dto/find-all-conversations.dto';
 import { JwtPayloadType } from '../auth/strategies/types/jwt-payload.type';
 import { Response } from 'express';
+import { MessageResponseDto } from '../messages/dto/message-response.dto';
 
 @ApiTags('Conversations')
 @ApiBearerAuth()
@@ -149,6 +151,44 @@ export class ConversationsController {
       }),
       { page, limit },
     );
+  }
+
+  @Get(':id/messages')
+  @ApiParam({
+    name: 'id',
+    type: String,
+    required: true,
+  })
+  @ApiOperation({
+    summary: 'Get messages for a conversation',
+    description:
+      'Retrieve paginated messages for a specific conversation. Messages are ordered newest first (DESC) to support chat UI pagination where older messages load at the top.',
+  })
+  @ApiOkResponse({
+    type: InfinityPaginationResponse(MessageResponseDto),
+  })
+  async getConversationMessages(
+    @Request() request: { user: JwtPayloadType },
+    @Param('id') id: string,
+    @Query() query: FindConversationMessagesDto,
+  ): Promise<InfinityPaginationResponseDto<MessageResponseDto>> {
+    const page = query?.page ?? 1;
+    let limit = query?.limit ?? 10;
+    if (limit > 50) {
+      limit = 50;
+    }
+
+    const messages =
+      await this.conversationsService.findMessagesByConversationWithPagination({
+        conversationId: id,
+        userId: request.user.id,
+        paginationOptions: {
+          page,
+          limit,
+        },
+      });
+
+    return infinityPagination(messages, { page, limit });
   }
 
   @Get(':id')

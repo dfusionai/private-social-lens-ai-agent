@@ -2,6 +2,7 @@ import { DeepPartial } from '../../../utils/types/deep-partial.type';
 import { NullableType } from '../../../utils/types/nullable.type';
 import { IPaginationOptions } from '../../../utils/types/pagination-options';
 import { Message } from '../../domain/message';
+import { Conversation } from '../../../conversations/domain/conversation';
 
 export abstract class MessageRepository {
   abstract create(
@@ -11,6 +12,14 @@ export abstract class MessageRepository {
   abstract findAllWithPagination({
     paginationOptions,
   }: {
+    paginationOptions: IPaginationOptions;
+  }): Promise<Message[]>;
+
+  abstract findByConversationWithPagination({
+    conversationId,
+    paginationOptions,
+  }: {
+    conversationId: Conversation['id'];
     paginationOptions: IPaginationOptions;
   }): Promise<Message[]>;
 
