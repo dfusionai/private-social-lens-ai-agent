@@ -7,6 +7,8 @@ import authConfig from './auth/config/auth.config';
 import appConfig from './config/app.config';
 import mailConfig from './mail/config/mail.config';
 import fileConfig from './files/config/file.config';
+import openaiConfig from './model-api/config/openai.config';
+import claudeConfig from './model-api/config/claude.config';
 import path from 'path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -36,7 +38,15 @@ import { MessagesModule } from './messages/messages.module';
     ConversationsModule,
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, authConfig, appConfig, mailConfig, fileConfig],
+      load: [
+        databaseConfig,
+        authConfig,
+        appConfig,
+        mailConfig,
+        fileConfig,
+        openaiConfig,
+        claudeConfig,
+      ],
       envFilePath: ['.env'],
     }),
     infrastructureDatabaseModule,

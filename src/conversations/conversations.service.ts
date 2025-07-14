@@ -1,6 +1,9 @@
 import { UsersService } from '../users/users.service';
 import { User } from '../users/domain/user';
 import { MessagesService } from '../messages/messages.service';
+import { ModelApiFactoryService } from '../model-api/services/model-api-factory.service';
+import { ModelProvider } from '../model-api/enums/model-provider.enum';
+import { ChatMessage } from '../model-api/interfaces/model-api.interface';
 import { MessageResponseDto } from '../messages/dto/message-response.dto';
 
 import {
@@ -24,6 +27,7 @@ export class ConversationsService {
   constructor(
     private readonly userService: UsersService,
     private readonly messagesService: MessagesService,
+    private readonly modelApiFactory: ModelApiFactoryService,
 
     // Dependencies here
     private readonly conversationRepository: ConversationRepository,
@@ -87,10 +91,40 @@ export class ConversationsService {
       },
     });
 
-    return {
-      conversation,
-      userMessage,
-    };
+    // Get conversation history for context and generate AI response
+    const messages = await this.getConversationHistory(conversation.id);
+    const provider = chatDto.options?.provider || ModelProvider.CLAUDE;
+    const modelService = this.modelApiFactory.getModelService(provider);
+
+    try {
+      const aiResponse = await modelService.chat(messages, {
+        model: chatDto.options?.model,
+        temperature: chatDto.options?.temperature,
+        maxTokens: chatDto.options?.maxTokens,
+      });
+
+      // Save the AI message
+      const aiMessage = await this.messagesService.create({
+        content: aiResponse.content,
+        role: 'assistant',
+        conversation: {
+          id: conversation.id,
+        },
+      });
+
+      return {
+        conversation,
+        userMessage,
+        aiMessage,
+      };
+    } catch (error) {
+      // If AI fails, still return conversation and user message
+      return {
+        conversation,
+        userMessage,
+        error: error.message,
+      };
+    }
   }
 
   async chatStream({
@@ -103,6 +137,13 @@ export class ConversationsService {
     // First, handle the conversation and save user message
     const { conversation, userMessage } = await this.chat({ userId, chatDto });
 
+    // Get conversation history for context
+    const messages = await this.getConversationHistory(conversation.id);
+
+    // Get the model service
+    const provider = chatDto.options?.provider || ModelProvider.CLAUDE;
+    const modelService = this.modelApiFactory.getModelService(provider);
+
     return new Observable<MessageEvent>((observer) => {
       // Send initial event with conversation and user message
       observer.next({
@@ -113,49 +154,57 @@ export class ConversationsService {
         }),
       } as MessageEvent);
 
-      // Simulate streaming AI response (replace this with actual AI service)
-      const aiResponse =
-        'This is a simulated AI response. In a real implementation, you would integrate with an AI service like OpenAI, Claude, etc.';
+      let fullResponse = '';
 
-      // Stream the response word by word
-      const words = aiResponse.split(' ');
-      let currentResponse = '';
+      // Create stream from AI service
+      const aiStream = modelService.chatStream(messages, {
+        model: chatDto.options?.model,
+        temperature: chatDto.options?.temperature,
+        maxTokens: chatDto.options?.maxTokens,
+      });
 
-      words.forEach((word, index) => {
-        setTimeout(() => {
-          currentResponse += (index > 0 ? ' ' : '') + word;
+      aiStream.subscribe({
+        next: (chunk) => {
+          if (chunk.content) {
+            fullResponse += chunk.content;
 
-          observer.next({
-            data: JSON.stringify({
-              type: 'chunk',
-              content: word,
-              fullContent: currentResponse,
-            }),
-          } as MessageEvent);
+            observer.next({
+              data: JSON.stringify({
+                type: 'chunk',
+                content: chunk.content,
+                fullContent: fullResponse,
+              }),
+            } as MessageEvent);
+          }
 
-          // If this is the last word, send completion event and save AI message
-          if (index === words.length - 1) {
-            setTimeout(async () => {
-              // Save the AI message to database
-              const aiMessage = await this.messagesService.create({
-                content: aiResponse,
+          if (chunk.done) {
+            // Save the AI message to database
+            this.messagesService
+              .create({
+                content: fullResponse,
                 role: 'assistant',
                 conversation: {
                   id: conversation.id,
                 },
+              })
+              .then((aiMessage) => {
+                observer.next({
+                  data: JSON.stringify({
+                    type: 'complete',
+                    aiMessage,
+                  }),
+                } as MessageEvent);
+
+                observer.complete();
+              })
+              .catch((error) => {
+                observer.error(error);
               });
-
-              observer.next({
-                data: JSON.stringify({
-                  type: 'complete',
-                  aiMessage,
-                }),
-              } as MessageEvent);
-
-              observer.complete();
-            }, 100);
           }
-        }, index * 100); // Delay each word by 100ms
+        },
+        error: (error) => {
+          observer.error(error);
+        },
       });
     });
   }
@@ -266,5 +315,22 @@ export class ConversationsService {
     });
 
     return this.conversationRepository.remove(id);
+  }
+
+  private async getConversationHistory(
+    conversationId: Conversation['id'],
+  ): Promise<ChatMessage[]> {
+    // Get recent messages for context (limit to prevent token overflow)
+    const messages =
+      await this.messagesService.findByConversationWithPagination({
+        conversationId,
+        paginationOptions: { page: 1, limit: 20 },
+      });
+
+    // Convert to ChatMessage format and reverse order (oldest first)
+    return messages.reverse().map((message) => ({
+      role: message.role as 'user' | 'assistant',
+      content: message.content,
+    }));
   }
 }

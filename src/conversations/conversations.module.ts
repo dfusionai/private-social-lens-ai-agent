@@ -1,4 +1,5 @@
 import { UsersModule } from '../users/users.module';
+import { ModelApiModule } from '../model-api/model-api.module';
 import {
   // do not remove this comment
   Module,
@@ -12,6 +13,7 @@ import { RelationalConversationPersistenceModule } from './infrastructure/persis
 @Module({
   imports: [
     UsersModule,
+    ModelApiModule,
 
     // do not remove this comment
     RelationalConversationPersistenceModule,

@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsUUID, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ChatRequestOptionsDto } from '../../model-api/dto/chat-request.dto';
 
 export class ChatDto {
   @ApiProperty({
@@ -25,4 +27,13 @@ export class ChatDto {
   @IsOptional()
   @IsString()
   title?: string;
+
+  @ApiPropertyOptional({
+    description: 'AI model options for this chat',
+    type: ChatRequestOptionsDto,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ChatRequestOptionsDto)
+  options?: ChatRequestOptionsDto;
 }

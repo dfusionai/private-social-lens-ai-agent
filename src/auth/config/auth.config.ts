@@ -29,6 +29,12 @@ class EnvironmentVariablesValidator {
 
   @IsString()
   AUTH_CONFIRM_EMAIL_TOKEN_EXPIRES_IN: string;
+
+  @IsString()
+  TELEGRAM_API_ID: string;
+
+  @IsString()
+  TELEGRAM_API_HASH: string;
 }
 
 export default registerAs<AuthConfig>('auth', () => {
@@ -44,5 +50,7 @@ export default registerAs<AuthConfig>('auth', () => {
     confirmEmailSecret: process.env.AUTH_CONFIRM_EMAIL_SECRET,
     confirmEmailExpires: process.env
       .AUTH_CONFIRM_EMAIL_TOKEN_EXPIRES_IN as ms.StringValue,
+    telegramApiId: process.env.TELEGRAM_API_ID,
+    telegramApiHash: process.env.TELEGRAM_API_HASH,
   };
 });

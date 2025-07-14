@@ -24,6 +24,7 @@ import { LoginResponseDto } from './dto/login-response.dto';
 import { NullableType } from '../utils/types/nullable.type';
 import { User } from '../users/domain/user';
 import { RefreshResponseDto } from './dto/refresh-response.dto';
+import { AuthTelegramLoginDto } from './dto/auth-telegram-login.dto';
 
 @ApiTags('Auth')
 @Controller({
@@ -43,6 +44,28 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   public login(@Body() loginDto: AuthEmailLoginDto): Promise<LoginResponseDto> {
     return this.service.validateLogin(loginDto);
+  }
+
+  @SerializeOptions({
+    groups: ['me'],
+  })
+  @Post('telegram/login')
+  @ApiOkResponse({
+    type: LoginResponseDto,
+  })
+  @HttpCode(HttpStatus.OK)
+  public telegramLogin(
+    @Body() loginDto: AuthTelegramLoginDto,
+  ): Promise<LoginResponseDto> {
+    return this.service.validateTelegramLogin(loginDto);
+  }
+
+  @Post('telegram/test')
+  @HttpCode(HttpStatus.OK)
+  public async testTelegramConnection(
+    @Body() loginDto: AuthTelegramLoginDto,
+  ): Promise<{ success: boolean; error?: string }> {
+    return this.service.testTelegramConnection(loginDto);
   }
 
   @Post('email/register')

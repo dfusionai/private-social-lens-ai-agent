@@ -28,6 +28,11 @@ import { Session } from '../session/domain/session';
 import { SessionService } from '../session/session.service';
 import { StatusEnum } from '../statuses/statuses.enum';
 import { User } from '../users/domain/user';
+import { AuthTelegramLoginDto } from './dto/auth-telegram-login.dto';
+import { TelegramClient } from 'telegram';
+import { StringSession } from 'telegram/sessions';
+import { Api } from 'telegram/tl';
+import { ConnectionTCPFull } from 'telegram/network/connection';
 
 @Injectable()
 export class AuthService {
@@ -542,6 +547,178 @@ export class AuthService {
 
   async logout(data: Pick<JwtRefreshPayloadType, 'sessionId'>) {
     return this.sessionService.deleteById(data.sessionId);
+  }
+
+  async validateTelegramLogin(
+    loginDto: AuthTelegramLoginDto,
+  ): Promise<LoginResponseDto> {
+    let client: TelegramClient | null = null;
+
+    try {
+      // Initialize Telegram client with session string
+      const telegramSession = new StringSession(loginDto.sessionString);
+      client = new TelegramClient(
+        telegramSession,
+        parseInt(
+          this.configService.getOrThrow('auth.telegramApiId', { infer: true }),
+        ),
+        this.configService.getOrThrow('auth.telegramApiHash', { infer: true }),
+        {
+          connectionRetries: 3,
+          timeout: 30000,
+          retryDelay: 1000,
+          autoReconnect: false,
+          useWSS: false,
+          useIPV6: false,
+          baseLogger: undefined,
+          deviceModel: 'Desktop',
+          systemVersion: 'Windows 10',
+          appVersion: '1.0.0',
+          langCode: 'en',
+          testServers: false,
+          connection: ConnectionTCPFull,
+        },
+      );
+
+      // Connect with better error handling
+      await client.connect();
+
+      // Wait a bit to ensure connection is stable
+      // await new Promise((resolve) => setTimeout(resolve, 1000));
+      //
+      // // Check if still connected before making API call
+      // if (!client.connected) {
+      //   throw new Error('Connection lost before API call');
+      // }
+
+      const me = (await client.getMe()) as Api.User;
+
+      if (!me) {
+        throw new UnauthorizedException('Invalid Telegram session');
+      }
+
+      // Find or create user
+      let user = await this.usersService.findBySocialIdAndProvider({
+        socialId: me.id.toString(),
+        provider: AuthProvidersEnum.telegram,
+      });
+
+      if (!user) {
+        // Create new user
+        const role = {
+          id: RoleEnum.user,
+        };
+        const status = {
+          id: StatusEnum.active,
+        };
+
+        user = await this.usersService.create({
+          email: null,
+          firstName: me.firstName || null,
+          lastName: me.lastName || null,
+          socialId: me.id.toString(),
+          provider: AuthProvidersEnum.telegram,
+          role,
+          status,
+        });
+
+        user = await this.usersService.findById(user.id);
+      }
+
+      if (!user) {
+        throw new UnprocessableEntityException({
+          status: HttpStatus.UNPROCESSABLE_ENTITY,
+          errors: {
+            user: 'userNotFound',
+          },
+        });
+      }
+
+      const hash = crypto
+        .createHash('sha256')
+        .update(randomStringGenerator())
+        .digest('hex');
+
+      const userSession = await this.sessionService.create({
+        user,
+        hash,
+      });
+
+      const { token, refreshToken, tokenExpires } = await this.getTokensData({
+        id: user.id,
+        role: user.role,
+        sessionId: userSession.id,
+        hash,
+      });
+
+      return {
+        refreshToken,
+        token,
+        tokenExpires,
+        user,
+      };
+    } catch (error) {
+      console.error('Telegram auth error:', error);
+      throw new UnauthorizedException('Invalid Telegram session');
+    } finally {
+      // Ensure client is properly disconnected
+      if (client) {
+        try {
+          await client.disconnect();
+        } catch (disconnectError) {
+          console.error(
+            'Error disconnecting Telegram client:',
+            disconnectError,
+          );
+        }
+      }
+    }
+  }
+
+  async testTelegramConnection(
+    loginDto: AuthTelegramLoginDto,
+  ): Promise<{ success: boolean; error?: string }> {
+    let client: TelegramClient | null = null;
+
+    try {
+      const telegramSession = new StringSession(loginDto.sessionString);
+      client = new TelegramClient(
+        telegramSession,
+        parseInt(
+          this.configService.getOrThrow('auth.telegramApiId', { infer: true }),
+        ),
+        this.configService.getOrThrow('auth.telegramApiHash', { infer: true }),
+        {
+          connectionRetries: 1,
+          timeout: 15000,
+          useWSS: false,
+          useIPV6: false,
+          baseLogger: undefined,
+          connection: ConnectionTCPFull,
+        },
+      );
+
+      await client.connect();
+      await client.getMe();
+
+      return {
+        success: true,
+        error: undefined,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    } finally {
+      if (client) {
+        try {
+          await client.disconnect();
+        } catch (disconnectError) {
+          console.error('Error disconnecting test client:', disconnectError);
+        }
+      }
+    }
   }
 
   private async getTokensData(data: {
