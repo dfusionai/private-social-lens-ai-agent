@@ -61,3 +61,6 @@ CLAUDE_API_KEY=your-claude-api-key-here
 
 # Gemini Configuration
 GEMINI_API_KEY=your-gemini-api-key-here
+
+# Vector Database Configuration (RAG)
+QDRANT_URL=http://localhost:6333

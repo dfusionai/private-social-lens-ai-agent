@@ -5,6 +5,7 @@ import { ModelApiFactoryService } from '../model-api/services/model-api-factory.
 import { ModelProvider } from '../model-api/enums/model-provider.enum';
 import { ChatMessage } from '../model-api/interfaces/model-api.interface';
 import { MessageResponseDto } from '../messages/dto/message-response.dto';
+import { RagService } from '../rag/rag.service';
 
 import {
   // common
@@ -13,6 +14,7 @@ import {
   UnprocessableEntityException,
   ForbiddenException,
   MessageEvent,
+  Logger,
 } from '@nestjs/common';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
@@ -24,10 +26,13 @@ import { Observable } from 'rxjs';
 
 @Injectable()
 export class ConversationsService {
+  private readonly logger = new Logger(ConversationsService.name);
+
   constructor(
     private readonly userService: UsersService,
     private readonly messagesService: MessagesService,
     private readonly modelApiFactory: ModelApiFactoryService,
+    private readonly ragService: RagService,
 
     // Dependencies here
     private readonly conversationRepository: ConversationRepository,
@@ -91,10 +96,51 @@ export class ConversationsService {
       },
     });
 
-    // Get conversation history for context and generate AI response
+    // Add user message to RAG context
+    await this.ragService.addMessageToContext(chatDto.content, {
+      conversationId: conversation.id,
+      messageId: userMessage.id,
+      userId: String(userId),
+      role: 'user',
+    });
+
+    // Get conversation history and enhance with RAG context
     const messages = await this.getConversationHistory(conversation.id);
+
+    // Enhance the user's query with relevant context from ALL user data (not just conversation)
+    const enhancedQuery = await this.ragService.enhancePromptWithContext(
+      chatDto.content,
+      {
+        userId: String(userId), // Search across ALL user data
+        // conversationId: conversation.id, // Remove conversation filter
+        limit: 10, // Increase limit for broader search
+        threshold: 0.05, // Much lower threshold to include Emily-John conversation
+      },
+    );
+
+    // Update the last message with enhanced content if RAG found relevant context
+    if (enhancedQuery !== chatDto.content && messages.length > 0) {
+      messages[messages.length - 1].content = enhancedQuery;
+    }
+
     const provider = chatDto.options?.provider || ModelProvider.CLAUDE;
     const modelService = this.modelApiFactory.getModelService(provider);
+
+    // Log the complete prompt sent to AI model
+    this.logger.log(`\n=== PROMPT SENT TO ${provider.toUpperCase()} ===`);
+    this.logger.log(`Original User Query: "${chatDto.content}"`);
+    this.logger.log(`Enhanced Query: "${enhancedQuery}"`);
+    this.logger.log(
+      `RAG Context Added: ${enhancedQuery !== chatDto.content ? 'YES' : 'NO'}`,
+    );
+    this.logger.log(`Total Messages in Context: ${messages.length}`);
+    this.logger.log('\n--- FULL CONVERSATION CONTEXT ---');
+    messages.forEach((msg, index) => {
+      this.logger.log(
+        `[${index + 1}] ${msg.role.toUpperCase()}: ${msg.content.substring(0, 200)}${msg.content.length > 200 ? '...' : ''}`,
+      );
+    });
+    this.logger.log('=== END PROMPT ===\n');
 
     try {
       const aiResponse = await modelService.chat(messages, {
@@ -110,6 +156,15 @@ export class ConversationsService {
         conversation: {
           id: conversation.id,
         },
+      });
+
+      // Add AI message to RAG context
+      await this.ragService.addMessageToContext(aiResponse.content, {
+        conversationId: conversation.id,
+        messageId: aiMessage.id,
+        userId: String(userId),
+        role: 'assistant',
+        source: 'chat_assistant_response',
       });
 
       return {
@@ -134,15 +189,81 @@ export class ConversationsService {
     userId: User['id'];
     chatDto: ChatDto;
   }): Promise<Observable<MessageEvent>> {
-    // First, handle the conversation and save user message
-    const { conversation, userMessage } = await this.chat({ userId, chatDto });
+    let conversation: Conversation;
 
-    // Get conversation history for context
+    if (chatDto.conversationId) {
+      // Validate conversation exists and user owns it
+      conversation = await this.validateConversationOwnership({
+        conversationId: chatDto.conversationId,
+        userId,
+      });
+    } else {
+      // Create new conversation
+      conversation = await this.create({
+        userId,
+        createConversationDto: {
+          title: chatDto.title || 'New Chat',
+        },
+      });
+    }
+
+    // Save the user message
+    const userMessage = await this.messagesService.create({
+      content: chatDto.content,
+      role: 'user',
+      conversation: {
+        id: conversation.id,
+      },
+    });
+
+    // Add user message to RAG context
+    await this.ragService.addMessageToContext(chatDto.content, {
+      conversationId: conversation.id,
+      messageId: userMessage.id,
+      userId: String(userId),
+      role: 'user',
+    });
+
+    // Get conversation history and enhance with RAG context
     const messages = await this.getConversationHistory(conversation.id);
+
+    // Enhance the user's query with relevant context from ALL user data (not just conversation)
+    const enhancedQuery = await this.ragService.enhancePromptWithContext(
+      chatDto.content,
+      {
+        userId: String(userId), // Search across ALL user data
+        // conversationId: conversation.id, // Remove conversation filter
+        limit: 10, // Increase limit for broader search
+        threshold: 0.05, // Much lower threshold to include Emily-John conversation
+      },
+    );
+
+    // Update the last message with enhanced content if RAG found relevant context
+    if (enhancedQuery !== chatDto.content && messages.length > 0) {
+      messages[messages.length - 1].content = enhancedQuery;
+    }
 
     // Get the model service
     const provider = chatDto.options?.provider || ModelProvider.GEMINI;
     const modelService = this.modelApiFactory.getModelService(provider);
+
+    // Log the complete prompt sent to AI model (streaming)
+    this.logger.log(
+      `\n=== STREAMING PROMPT SENT TO ${provider.toUpperCase()} ===`,
+    );
+    this.logger.log(`Original User Query: "${chatDto.content}"`);
+    this.logger.log(`Enhanced Query: "${enhancedQuery}"`);
+    this.logger.log(
+      `RAG Context Added: ${enhancedQuery !== chatDto.content ? 'YES' : 'NO'}`,
+    );
+    this.logger.log(`Total Messages in Context: ${messages.length}`);
+    this.logger.log('\n--- FULL CONVERSATION CONTEXT ---');
+    messages.forEach((msg, index) => {
+      this.logger.log(
+        `[${index + 1}] ${msg.role.toUpperCase()}: ${msg.content.substring(0, 200)}${msg.content.length > 200 ? '...' : ''}`,
+      );
+    });
+    this.logger.log('=== END STREAMING PROMPT ===\n');
 
     return new Observable<MessageEvent>((observer) => {
       // Send initial event with conversation and user message
@@ -187,7 +308,15 @@ export class ConversationsService {
                   id: conversation.id,
                 },
               })
-              .then((aiMessage) => {
+              .then(async (aiMessage) => {
+                // Add AI message to RAG context
+                await this.ragService.addMessageToContext(fullResponse, {
+                  conversationId: conversation.id,
+                  messageId: aiMessage.id,
+                  userId: String(userId),
+                  role: 'assistant',
+                });
+
                 observer.next({
                   data: JSON.stringify({
                     type: 'complete',
@@ -313,6 +442,9 @@ export class ConversationsService {
       conversationId: id,
       userId,
     });
+
+    // Remove conversation context from RAG
+    await this.ragService.removeConversationContext(id);
 
     return this.conversationRepository.remove(id);
   }
