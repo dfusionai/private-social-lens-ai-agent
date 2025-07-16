@@ -30,19 +30,35 @@ export class QdrantService extends VectorDbService {
   }
 
   async initialize(): Promise<void> {
+    const expectedDimensions = this.embeddingService.getEmbeddingDimensions();
+
     try {
-      await this.client.getCollection(this.collectionName);
-      this.logger.log('Collection already exists');
+      const collection = await this.client.getCollection(this.collectionName);
+      const currentDimensions = collection.config?.params?.vectors?.size;
+
+      if (currentDimensions && currentDimensions !== expectedDimensions) {
+        this.logger.warn(
+          `Collection dimension mismatch. Expected: ${expectedDimensions}, Current: ${currentDimensions}. Recreating collection...`,
+        );
+        await this.client.deleteCollection(this.collectionName);
+        await this.createCollection(expectedDimensions);
+      } else {
+        this.logger.log('Collection already exists with correct dimensions');
+      }
     } catch {
       this.logger.log('Collection not found, creating new collection');
-      const dimensions = this.embeddingService.getEmbeddingDimensions();
-      await this.client.createCollection(this.collectionName, {
-        vectors: {
-          size: dimensions,
-          distance: 'Cosine',
-        },
-      });
+      await this.createCollection(expectedDimensions);
     }
+  }
+
+  private async createCollection(dimensions: number): Promise<void> {
+    await this.client.createCollection(this.collectionName, {
+      vectors: {
+        size: dimensions,
+        distance: 'Cosine',
+      },
+    });
+    this.logger.log(`Created collection with ${dimensions} dimensions`);
   }
 
   private async generateEmbedding(text: string): Promise<number[]> {

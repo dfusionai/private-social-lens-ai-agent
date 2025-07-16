@@ -37,8 +37,8 @@ export const DEFAULT_EMBEDDING_CONFIGS: Record<
     retries: 3,
   },
   [EmbeddingProvider.OLLAMA]: {
-    model: 'nomic-embed-text',
-    dimensions: 768,
+    model: 'mxbai-embed-large',
+    dimensions: 1024,
     url: 'http://localhost:11434',
     timeout: 30000,
     retries: 3,
@@ -61,6 +61,7 @@ export const EMBEDDING_MODEL_DIMENSIONS: Record<string, number> = {
   'nomic-embed-text': 768,
   'mxbai-embed-large': 1024,
   'snowflake-arctic-embed': 1024,
+  'all-minilm': 384,
 
   // Transformers models
   'Xenova/all-MiniLM-L6-v2': 384,

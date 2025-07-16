@@ -109,44 +109,69 @@ export class RagService {
 
   private buildContextText(documents: SearchResult[]): string {
     if (documents.length === 0) {
-      return '';
+      return `### INSTRUCTIONS:
+You are my personal AI assistant using retrieved context from my chat history in Qdrant. Respond as I would, matching my communication style and honoring past commitments or preferences found in the context.
+
+### CONTEXT RELEVANCE:
+- Context score threshold: Use context with similarity > 0.7
+- If multiple contexts conflict, prioritize the most recent (highest timestamp)
+- If context seems irrelevant or fragmented, rely on general reasoning
+
+### RETRIEVED CONTEXT:
+No relevant context found.
+
+### RESPONSE GUIDELINES:
+1. Style Matching: Mirror my typical tone, formality level, and response length patterns from context
+2. Consistency: Respect prior agreements, opinions, and relationship dynamics shown in context
+3. Context Quality: 
+   - Score >0.8: High confidence, use context heavily
+   - Score 0.7-0.8: Moderate confidence, use context but verify if unsure
+   - Score <0.7: Low confidence, mention limited context
+4. Uncertainty Handling: If context is unclear or insufficient, say so and ask for clarification
+5. Privacy: Don't reference sensitive details from context unless directly relevant
+
+### OUTPUT FORMAT:
+Provide only the response message - no explanations, metadata, or system notes.
+
+### RESPONSE:`;
     }
 
-    const contextParts = documents.map((doc, index) => {
-      const source = doc.metadata.source || 'Unknown';
-      const platform = doc.metadata.platform || '';
+    const contextParts = documents.map((doc) => {
       const timestamp =
-        doc.metadata.originalTimestamp || doc.metadata.timestamp;
+        doc.metadata.originalTimestamp || doc.metadata.timestamp || 'Unknown';
+      const formattedTimestamp =
+        timestamp !== 'Unknown' ? new Date(timestamp).toISOString() : 'Unknown';
 
-      let sourceLabel = source;
-      if (platform) {
-        sourceLabel = `${platform.toUpperCase()} (${source})`;
-      }
-
-      let timeInfo = '';
-      if (timestamp) {
-        const date = new Date(timestamp);
-        timeInfo = ` - ${date.toLocaleDateString()}`;
-      }
-
-      return `[CONTEXT ${index + 1}] Source: ${sourceLabel}${timeInfo}\nContent: ${doc.content}`;
+      return `Similarity Score: ${doc.score.toFixed(3)}
+Timestamp: ${formattedTimestamp}
+Context: ${doc.content}`;
     });
 
-    return `## CONTEXT INFORMATION
+    return `### INSTRUCTIONS:
+You are my personal AI assistant using retrieved context from my chat history in Qdrant. Respond as I would, matching my communication style and honoring past commitments or preferences found in the context.
 
-You are an AI assistant with access to the user's personal data. Use the following context to answer questions accurately and helpfully.
+### CONTEXT RELEVANCE:
+- Context score threshold: Use context with similarity > 0.7
+- If multiple contexts conflict, prioritize the most recent (highest timestamp)
+- If context seems irrelevant or fragmented, rely on general reasoning
 
+### RETRIEVED CONTEXT:
 ${contextParts.join('\n\n')}
 
-## INSTRUCTIONS
+### RESPONSE GUIDELINES:
+1. Style Matching: Mirror my typical tone, formality level, and response length patterns from context
+2. Consistency: Respect prior agreements, opinions, and relationship dynamics shown in context
+3. Context Quality: 
+   - Score >0.8: High confidence, use context heavily
+   - Score 0.7-0.8: Moderate confidence, use context but verify if unsure
+   - Score <0.7: Low confidence, mention limited context
+4. Uncertainty Handling: If context is unclear or insufficient, say so and ask for clarification
+5. Privacy: Don't reference sensitive details from context unless directly relevant
 
-- Answer based on the provided context above
-- If the context contains relevant information, use it to provide a specific answer
-- If the context doesn't contain enough information, say so clearly
-- Always reference which context source you're using
-- Be helpful and conversational
+### OUTPUT FORMAT:
+Provide only the response message - no explanations, metadata, or system notes.
 
-## USER QUESTION`;
+### RESPONSE:`;
   }
 
   async enhancePromptWithContext(
@@ -178,10 +203,16 @@ ${contextParts.join('\n\n')}
     this.logger.log('=== END RAG RETRIEVAL ===\n');
 
     if (ragContext.retrievedDocuments.length === 0) {
-      return userMessage;
+      return `${ragContext.contextText}
+### MESSAGE TO RESPOND TO:
+Message: ${userMessage}
+### RESPONSE:`;
     }
 
-    return `${ragContext.contextText}\n\n${userMessage}`;
+    return `${ragContext.contextText}
+### MESSAGE TO RESPOND TO:
+Message: ${userMessage}
+### RESPONSE:`;
   }
 
   async addMessageToContext(

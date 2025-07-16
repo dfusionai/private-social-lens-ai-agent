@@ -1,10 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import {
   EmbeddingService,
   EmbeddingConfig,
 } from '../interfaces/embedding.interface';
 
-@Injectable()
 export class OllamaEmbeddingService extends EmbeddingService {
   private readonly logger = new Logger(OllamaEmbeddingService.name);
   private readonly baseUrl: string;
@@ -66,7 +65,9 @@ export class OllamaEmbeddingService extends EmbeddingService {
       const data = await response.json();
       const models = data.models || [];
       const hasModel = models.some(
-        (model: any) => model.name === this.config.model,
+        (model: any) =>
+          model.name === this.config.model ||
+          model.name.startsWith(this.config.model + ':'),
       );
 
       if (!hasModel) {

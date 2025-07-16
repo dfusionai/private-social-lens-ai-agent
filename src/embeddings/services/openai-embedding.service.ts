@@ -1,11 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import OpenAI from 'openai';
 import {
   EmbeddingService,
   EmbeddingConfig,
 } from '../interfaces/embedding.interface';
 
-@Injectable()
 export class OpenAIEmbeddingService extends EmbeddingService {
   private readonly logger = new Logger(OpenAIEmbeddingService.name);
   private openai: OpenAI;

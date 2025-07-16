@@ -71,6 +71,9 @@ VECTOR_DB_EMBEDDING_DIMENSIONS=1536
 # Qdrant Configuration
 QDRANT_URL=http://localhost:6333
 
+# Chroma Configuration (for future use)
+# CHROMA_URL=http://localhost:8000
+
 # Embedding Provider Configuration
 EMBEDDING_PROVIDER=openai
 
@@ -82,7 +85,7 @@ EMBEDDING_OPENAI_RETRIES=3
 
 # Ollama Embeddings Configuration
 EMBEDDING_OLLAMA_URL=http://localhost:11434
-EMBEDDING_OLLAMA_MODEL=nomic-embed-text
+EMBEDDING_OLLAMA_MODEL=mxbai-embed-large
 EMBEDDING_OLLAMA_DIMENSIONS=768
 EMBEDDING_OLLAMA_TIMEOUT=30000
 EMBEDDING_OLLAMA_RETRIES=3
@@ -92,9 +95,6 @@ EMBEDDING_TRANSFORMERS_MODEL=Xenova/all-MiniLM-L6-v2
 EMBEDDING_TRANSFORMERS_DIMENSIONS=384
 EMBEDDING_TRANSFORMERS_TIMEOUT=60000
 EMBEDDING_TRANSFORMERS_RETRIES=1
-
-# Chroma Configuration (for future use)
-# CHROMA_URL=http://localhost:8000
 
 # Pinecone Configuration (for future use)
 # PINECONE_API_KEY=your-pinecone-api-key
