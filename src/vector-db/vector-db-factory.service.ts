@@ -6,13 +6,17 @@ import {
 } from './interfaces/vector-db.interface';
 import { VectorDbProvider } from './enums/vector-db-provider.enum';
 import { QdrantService } from './providers/qdrant.service';
+import { EmbeddingService } from '../embeddings/interfaces/embedding.interface';
 
 @Injectable()
 export class VectorDbFactory {
   private readonly logger = new Logger(VectorDbFactory.name);
   private serviceInstance: VectorDbService;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly embeddingService: EmbeddingService,
+  ) {}
 
   async createVectorDbService(): Promise<VectorDbService> {
     if (this.serviceInstance) {
@@ -28,7 +32,11 @@ export class VectorDbFactory {
 
     switch (provider) {
       case VectorDbProvider.QDRANT:
-        this.serviceInstance = new QdrantService(this.configService, config);
+        this.serviceInstance = new QdrantService(
+          this.configService,
+          this.embeddingService,
+          config,
+        );
         break;
 
       // Future implementations can be added here

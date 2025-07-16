@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { v4 as uuidv4 } from 'uuid';
-import OpenAI from 'openai';
 import { AllConfigType } from '../../config/config.type';
+import { EmbeddingService } from '../../embeddings/interfaces/embedding.interface';
 import {
   VectorDbService,
   DocumentChunk,
@@ -16,20 +16,16 @@ import {
 export class QdrantService extends VectorDbService {
   private readonly logger = new Logger(QdrantService.name);
   private client: QdrantClient;
-  private openai: OpenAI;
 
   constructor(
     private readonly configService: ConfigService<AllConfigType>,
+    private readonly embeddingService: EmbeddingService,
     config: VectorDbConfig,
   ) {
     super(config);
 
     this.client = new QdrantClient({
       url: config.url,
-    });
-
-    this.openai = new OpenAI({
-      apiKey: this.configService.get('openai.apiKey', { infer: true }),
     });
   }
 
@@ -39,9 +35,10 @@ export class QdrantService extends VectorDbService {
       this.logger.log('Collection already exists');
     } catch {
       this.logger.log('Collection not found, creating new collection');
+      const dimensions = this.embeddingService.getEmbeddingDimensions();
       await this.client.createCollection(this.collectionName, {
         vectors: {
-          size: 1536, // text-embedding-3-small size
+          size: dimensions,
           distance: 'Cosine',
         },
       });
@@ -50,11 +47,7 @@ export class QdrantService extends VectorDbService {
 
   private async generateEmbedding(text: string): Promise<number[]> {
     try {
-      const response = await this.openai.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: text,
-      });
-      return response.data[0].embedding;
+      return await this.embeddingService.generateEmbedding(text);
     } catch (error) {
       this.logger.error('Failed to generate embedding:', error);
       throw error;
