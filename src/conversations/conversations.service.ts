@@ -141,7 +141,7 @@ export class ConversationsService {
     const messages = await this.getConversationHistory(conversation.id);
 
     // Get the model service
-    const provider = chatDto.options?.provider || ModelProvider.CLAUDE;
+    const provider = chatDto.options?.provider || ModelProvider.GEMINI;
     const modelService = this.modelApiFactory.getModelService(provider);
 
     return new Observable<MessageEvent>((observer) => {
