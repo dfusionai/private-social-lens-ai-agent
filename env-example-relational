@@ -75,7 +75,7 @@ QDRANT_URL=http://localhost:6333
 # CHROMA_URL=http://localhost:8000
 
 # Embedding Provider Configuration
-EMBEDDING_PROVIDER=openai
+EMBEDDING_PROVIDER=ollama
 
 # OpenAI Embeddings Configuration
 EMBEDDING_OPENAI_MODEL=text-embedding-3-small
