@@ -1,6 +1,8 @@
+# Use platform flag only on ARM64 (Apple Silicon)
+ARG TARGETPLATFORM
 FROM node:22.17.0-alpine
 
-RUN apk add --no-cache bash
+RUN apk add --no-cache bash curl
 RUN npm i -g @nestjs/cli typescript ts-node
 
 COPY package*.json /tmp/app/

@@ -69,7 +69,7 @@ VECTOR_DB_EMBEDDING_MODEL=text-embedding-3-small
 VECTOR_DB_EMBEDDING_DIMENSIONS=1536
 
 # Qdrant Configuration
-QDRANT_URL=http://localhost:6333
+QDRANT_URL=http://qdrant:6333
 
 # Chroma Configuration (for future use)
 # CHROMA_URL=http://localhost:8000
@@ -84,7 +84,7 @@ EMBEDDING_OPENAI_TIMEOUT=30000
 EMBEDDING_OPENAI_RETRIES=3
 
 # Ollama Embeddings Configuration
-EMBEDDING_OLLAMA_URL=http://localhost:11434
+EMBEDDING_OLLAMA_URL=http://ollama:11434
 EMBEDDING_OLLAMA_MODEL=mxbai-embed-large
 EMBEDDING_OLLAMA_DIMENSIONS=768
 EMBEDDING_OLLAMA_TIMEOUT=30000
