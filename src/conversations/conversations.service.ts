@@ -97,12 +97,12 @@ export class ConversationsService {
     });
 
     // Add user message to RAG context
-    await this.ragService.addMessageToContext(chatDto.content, {
-      conversationId: conversation.id,
-      messageId: userMessage.id,
-      userId: String(userId),
-      role: 'user',
-    });
+    // await this.ragService.addMessageToContext(chatDto.content, {
+    //   conversationId: conversation.id,
+    //   messageId: userMessage.id,
+    //   userId: String(userId),
+    //   role: 'user',
+    // });
 
     // Get conversation history and enhance with RAG context
     const messages = await this.getConversationHistory(conversation.id);
@@ -159,13 +159,13 @@ export class ConversationsService {
       });
 
       // Add AI message to RAG context
-      await this.ragService.addMessageToContext(aiResponse.content, {
-        conversationId: conversation.id,
-        messageId: aiMessage.id,
-        userId: String(userId),
-        role: 'assistant',
-        source: 'chat_assistant_response',
-      });
+      // await this.ragService.addMessageToContext(aiResponse.content, {
+      //   conversationId: conversation.id,
+      //   messageId: aiMessage.id,
+      //   userId: String(userId),
+      //   role: 'assistant',
+      //   source: 'chat_assistant_response',
+      // });
 
       return {
         conversation,
@@ -217,12 +217,12 @@ export class ConversationsService {
     });
 
     // Add user message to RAG context
-    await this.ragService.addMessageToContext(chatDto.content, {
-      conversationId: conversation.id,
-      messageId: userMessage.id,
-      userId: String(userId),
-      role: 'user',
-    });
+    // await this.ragService.addMessageToContext(chatDto.content, {
+    //   conversationId: conversation.id,
+    //   messageId: userMessage.id,
+    //   userId: String(userId),
+    //   role: 'user',
+    // });
 
     // Get conversation history and enhance with RAG context
     const messages = await this.getConversationHistory(conversation.id);
@@ -308,14 +308,14 @@ export class ConversationsService {
                   id: conversation.id,
                 },
               })
-              .then(async (aiMessage) => {
-                // Add AI message to RAG context
-                await this.ragService.addMessageToContext(fullResponse, {
-                  conversationId: conversation.id,
-                  messageId: aiMessage.id,
-                  userId: String(userId),
-                  role: 'assistant',
-                });
+              .then((aiMessage) => {
+                // // Add AI message to RAG context
+                // await this.ragService.addMessageToContext(fullResponse, {
+                //   conversationId: conversation.id,
+                //   messageId: aiMessage.id,
+                //   userId: String(userId),
+                //   role: 'assistant',
+                // });
 
                 observer.next({
                   data: JSON.stringify({
