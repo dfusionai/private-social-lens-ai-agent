@@ -49,6 +49,12 @@ export abstract class VectorDbService {
     metadata?: Record<string, any>,
   ): Promise<string>;
 
+  abstract addDocumentWithEmbedding(
+    content: string,
+    embedding: number[],
+    metadata?: Record<string, any>,
+  ): Promise<string>;
+
   abstract searchSimilar(
     query: string,
     limit?: number,

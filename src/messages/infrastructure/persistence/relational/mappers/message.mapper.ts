@@ -7,7 +7,7 @@ import { MessageEntity } from '../entities/message.entity';
 export class MessageMapper {
   static toDomain(raw: MessageEntity): Message {
     const domainEntity = new Message();
-    domainEntity.content = raw.content;
+    domainEntity.content = raw.content || '';
 
     domainEntity.role = raw.role;
 

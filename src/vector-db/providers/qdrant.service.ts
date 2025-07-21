@@ -115,6 +115,36 @@ export class QdrantService extends VectorDbService {
     return id;
   }
 
+  async addDocumentWithEmbedding(
+    content: string,
+    embedding: number[],
+    metadata: Record<string, any> = {},
+  ): Promise<string> {
+    const id = uuidv4();
+
+    try {
+      await this.client.upsert(this.collectionName, {
+        points: [
+          {
+            id,
+            vector: embedding,
+            payload: {
+              content,
+              ...metadata,
+              timestamp: new Date(),
+            },
+          },
+        ],
+      });
+
+      this.logger.log(`Added document with pre-computed embedding: ${id}`);
+      return id;
+    } catch (error) {
+      this.logger.error('Failed to add document with embedding:', error);
+      throw error;
+    }
+  }
+
   async searchSimilar(
     query: string,
     limit: number = 5,

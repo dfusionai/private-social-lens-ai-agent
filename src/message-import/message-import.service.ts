@@ -24,28 +24,52 @@ export class MessageImportService {
   async importMessage(
     userId: string,
     messageDto: ImportMessageDto,
-  ): Promise<{ documentId: string; message: string }> {
+    useEncryption: boolean = true,
+  ): Promise<{ documentId: string; fileHash?: string; message: string }> {
     try {
       const content = this.formatMessageContent(messageDto);
       const metadata = this.buildMessageMetadata(userId, messageDto);
 
-      const documentId = await this.ragService.addMessageToContext(content, {
-        conversationId: `${messageDto.platform}_import`,
-        messageId: messageDto.originalMessageId || '',
-        userId,
-        role: 'user',
-        source: `${messageDto.platform}_message`,
-        ...metadata,
-      });
+      if (useEncryption) {
+        const result = await this.ragService.addSecureMessageToContext(
+          content,
+          {
+            conversationId: `${messageDto.platform}_import`,
+            messageId: messageDto.originalMessageId || '',
+            userId,
+            role: 'user',
+            source: `${messageDto.platform}_message`,
+          },
+        );
 
-      this.logger.log(
-        `Imported ${messageDto.platform} message for user ${userId}: ${documentId}`,
-      );
+        this.logger.log(
+          `Imported encrypted ${messageDto.platform} message for user ${userId}: ${result.documentId} with hash: ${result.fileHash}`,
+        );
 
-      return {
-        documentId,
-        message: 'Message imported successfully',
-      };
+        return {
+          documentId: result.documentId,
+          fileHash: result.fileHash,
+          message: 'Encrypted message imported successfully',
+        };
+      } else {
+        const documentId = await this.ragService.addMessageToContext(content, {
+          conversationId: `${messageDto.platform}_import`,
+          messageId: messageDto.originalMessageId || '',
+          userId,
+          role: 'user',
+          source: `${messageDto.platform}_message`,
+          ...metadata,
+        });
+
+        this.logger.log(
+          `Imported ${messageDto.platform} message for user ${userId}: ${documentId}`,
+        );
+
+        return {
+          documentId,
+          message: 'Message imported successfully',
+        };
+      }
     } catch (error) {
       this.logger.error('Failed to import message:', error);
       throw error;
@@ -55,6 +79,7 @@ export class MessageImportService {
   async importMessages(
     userId: string,
     importDto: ImportMessagesDto,
+    useEncryption: boolean = true,
   ): Promise<{
     totalImported: number;
     successful: number;
@@ -74,7 +99,7 @@ export class MessageImportService {
 
     for (const message of importDto.messages) {
       try {
-        await this.importMessage(userId, message);
+        await this.importMessage(userId, message, useEncryption);
         results.successful++;
       } catch (error) {
         this.logger.warn(

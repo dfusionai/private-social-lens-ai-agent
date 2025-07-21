@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { VectorDbService, SearchResult } from '../vector-db/vector-db.service';
+import { SecureMessageService } from '../secure-message/secure-message.service';
 
 export interface RagContext {
   query: string;
@@ -20,7 +21,11 @@ export interface RagSearchOptions {
 export class RagService {
   private readonly logger = new Logger(RagService.name);
 
-  constructor(private readonly vectorDbService: VectorDbService) {}
+  constructor(
+    private readonly vectorDbService: VectorDbService,
+    @Inject(forwardRef(() => SecureMessageService))
+    private readonly secureMessageService: SecureMessageService,
+  ) {}
 
   async retrieveContext(
     query: string,
@@ -94,17 +99,48 @@ export class RagService {
         `Pre-filter results: ${searchResults.length}, Post-filter: ${filteredResults.length}`,
       );
 
-      const contextText = this.buildContextText(filteredResults);
+      const decryptedResults = await this.decryptSearchResults(filteredResults);
+      const contextText = this.buildContextText(decryptedResults);
 
       return {
         query,
-        retrievedDocuments: filteredResults,
+        retrievedDocuments: decryptedResults,
         contextText,
       };
     } catch (error) {
       this.logger.error('Failed to retrieve RAG context:', error);
       throw error;
     }
+  }
+
+  private async decryptSearchResults(
+    results: SearchResult[],
+  ): Promise<SearchResult[]> {
+    const decryptedResults: SearchResult[] = [];
+
+    for (const result of results) {
+      try {
+        if (result.metadata.fileHash && result.metadata.isEncrypted) {
+          const decryptedMessage =
+            await this.secureMessageService.retrieveSecureMessage(
+              result.metadata.fileHash,
+            );
+
+          decryptedResults.push({
+            ...result,
+            content: decryptedMessage.content,
+          });
+        } else {
+          decryptedResults.push(result);
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to decrypt message with hash ${result.metadata.fileHash}, skipping. ${error}`,
+        );
+      }
+    }
+
+    return decryptedResults;
   }
 
   private buildContextText(documents: SearchResult[]): string {
@@ -235,6 +271,8 @@ Message: ${userMessage}
       userId: string;
       role: 'user' | 'assistant';
       source?: string;
+      fileHash?: string;
+      isEncrypted?: boolean;
     },
   ): Promise<string> {
     try {
@@ -242,6 +280,8 @@ Message: ${userMessage}
         ...metadata,
         source: metadata.source || `${metadata.role}_message`,
         timestamp: new Date(),
+        fileHash: metadata.fileHash,
+        isEncrypted: metadata.isEncrypted || false,
       };
 
       const documentId = await this.vectorDbService.addDocument(
@@ -256,6 +296,53 @@ Message: ${userMessage}
       return documentId;
     } catch (error) {
       this.logger.error('Failed to add message to context:', error);
+      throw error;
+    }
+  }
+
+  async addSecureMessageToContext(
+    content: string,
+    metadata: {
+      conversationId: string;
+      messageId: string;
+      userId: string;
+      role: 'user' | 'assistant';
+      source?: string;
+    },
+  ): Promise<{ documentId: string; fileHash: string }> {
+    try {
+      const secureResult = await this.secureMessageService.storeSecureMessage(
+        content,
+        {
+          ...metadata,
+          timestamp: new Date(),
+        },
+      );
+
+      const enhancedMetadata = {
+        ...metadata,
+        source: metadata.source || `${metadata.role}_message`,
+        timestamp: new Date(),
+        fileHash: secureResult.fileHash,
+        isEncrypted: true,
+      };
+
+      const documentId = await this.vectorDbService.addDocumentWithEmbedding(
+        '',
+        secureResult.embedding,
+        enhancedMetadata,
+      );
+
+      this.logger.log(
+        `Added secure message to vector database: ${documentId} with hash: ${secureResult.fileHash}`,
+      );
+
+      return {
+        documentId,
+        fileHash: secureResult.fileHash,
+      };
+    } catch (error) {
+      this.logger.error('Failed to add secure message to context:', error);
       throw error;
     }
   }
