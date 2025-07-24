@@ -30,15 +30,11 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
 
 import { ConversationsModule } from './conversations/conversations.module';
 import { MessagesModule } from './messages/messages.module';
-import { DocumentsModule } from './documents/documents.module';
-import { MessageImportModule } from './message-import/message-import.module';
 
 @Module({
   imports: [
     MessagesModule,
     ConversationsModule,
-    DocumentsModule,
-    MessageImportModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [

@@ -1,6 +1,5 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { VectorDbService, SearchResult } from '../vector-db/vector-db.service';
-import { SecureMessageService } from '../secure-message/secure-message.service';
 import { NautilusService } from '../nautilus/nautilus.service';
 
 export interface RagContext {
@@ -25,8 +24,6 @@ export class RagService {
   constructor(
     private readonly vectorDbService: VectorDbService,
     private readonly nautilusService: NautilusService,
-    @Inject(forwardRef(() => SecureMessageService))
-    private readonly secureMessageService: SecureMessageService,
   ) {}
 
   async retrieveContext(
@@ -363,53 +360,6 @@ Message: ${userMessage}
       return documentId;
     } catch (error) {
       this.logger.error('Failed to add message to context:', error);
-      throw error;
-    }
-  }
-
-  async addSecureMessageToContext(
-    content: string,
-    metadata: {
-      conversationId: string;
-      messageId: string;
-      userId: string;
-      role: 'user' | 'assistant';
-      source?: string;
-    },
-  ): Promise<{ documentId: string; fileHash: string }> {
-    try {
-      const secureResult = await this.secureMessageService.storeSecureMessage(
-        content,
-        {
-          ...metadata,
-          timestamp: new Date(),
-        },
-      );
-
-      const enhancedMetadata = {
-        ...metadata,
-        source: metadata.source || `${metadata.role}_message`,
-        timestamp: new Date(),
-        fileHash: secureResult.fileHash,
-        isEncrypted: true,
-      };
-
-      const documentId = await this.vectorDbService.addDocumentWithEmbedding(
-        '',
-        secureResult.embedding,
-        enhancedMetadata,
-      );
-
-      this.logger.log(
-        `Added secure message to vector database: ${documentId} with hash: ${secureResult.fileHash}`,
-      );
-
-      return {
-        documentId,
-        fileHash: secureResult.fileHash,
-      };
-    } catch (error) {
-      this.logger.error('Failed to add secure message to context:', error);
       throw error;
     }
   }
