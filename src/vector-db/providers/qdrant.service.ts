@@ -26,7 +26,13 @@ export class QdrantService extends VectorDbService {
 
     this.client = new QdrantClient({
       url: config.url,
+      port: config.port,
+      apiKey: config.apiKey || undefined,
     });
+
+    this.logger.log(
+      `Initializing Qdrant client with URL: ${config.url}${config.port ? `, Port: ${config.port}` : ''}${config.apiKey ? ' (with API key)' : ' (no API key)'}`,
+    );
   }
 
   async initialize(): Promise<void> {

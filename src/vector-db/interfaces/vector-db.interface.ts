@@ -30,6 +30,8 @@ export interface VectorDbConfig {
   collectionName?: string;
   embeddingModel?: string;
   embeddingDimensions?: number;
+  apiKey?: string | null;
+  port?: number | null;
   [key: string]: any;
 }
 

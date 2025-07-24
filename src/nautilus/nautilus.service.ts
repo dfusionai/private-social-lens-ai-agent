@@ -118,7 +118,7 @@ export class NautilusService {
 
       const response = await firstValueFrom(
         this.httpService.post<NautilusResponse>(
-          `${this.config.url}/retrieve`,
+          `${this.config.url}/retrieve_messages_by_blob_ids`,
           request,
           {
             headers: {
@@ -183,7 +183,7 @@ export class NautilusService {
 
       const response = await firstValueFrom(
         this.httpService.post<NautilusResponse>(
-          `${this.config.url}/retrieve`,
+          `${this.config.url}/retrieve_messages_by_blob_ids`,
           request,
           {
             headers: {

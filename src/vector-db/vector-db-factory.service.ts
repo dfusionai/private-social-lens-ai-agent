@@ -78,25 +78,30 @@ export class VectorDbFactory {
       collectionName:
         this.configService.get<string>('VECTOR_DB_COLLECTION_NAME', {
           infer: true,
-        }) || 'chat_documents',
+        }) || 'nautilus_messages',
       embeddingModel:
         this.configService.get<string>('VECTOR_DB_EMBEDDING_MODEL', {
           infer: true,
-        }) || 'text-embedding-3-small',
+        }) || 'mxbai-embed-large',
       embeddingDimensions: parseInt(
         this.configService.get<string>('VECTOR_DB_EMBEDDING_DIMENSIONS', {
           infer: true,
-        }) || '1536',
+        }) || '1024',
       ),
     };
 
     switch (provider) {
       case VectorDbProvider.QDRANT:
+        const url =
+          this.configService.get<string>('QDRANT_URL', { infer: true }) ||
+          'http://localhost:6333';
         return {
           ...baseConfig,
-          url:
-            this.configService.get<string>('QDRANT_URL', { infer: true }) ||
-            'http://localhost:6333',
+          url: url,
+          apiKey:
+            this.configService.get<string>('QDRANT_API_KEY', { infer: true }) ||
+            null,
+          port: url?.startsWith('https://') ? 443 : null,
         };
 
       // Future configurations can be added here
