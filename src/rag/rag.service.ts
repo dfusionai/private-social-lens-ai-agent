@@ -42,12 +42,15 @@ export class RagService {
       let filter: Record<string, any> | undefined;
 
       // Priority: conversationId > userId > no filter
+      // Map interface fields to vector metadata field names
       if (conversationId) {
-        filter = { conversationId };
+        filter = { chat_id: conversationId }; // Use chat_id to match vector metadata
         this.logger.log(`Searching within conversation: ${conversationId}`);
       } else if (userId) {
-        filter = { userId };
-        this.logger.log(`Searching across ALL user data for userId: ${userId}`);
+        filter = { user_id: userId }; // Use user_id to match vector metadata (Telegram ID)
+        this.logger.log(
+          `Searching across ALL user data for Telegram ID: ${userId}`,
+        );
       } else {
         this.logger.log('Searching without filters (global search)');
       }

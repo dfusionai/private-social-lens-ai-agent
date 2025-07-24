@@ -5,7 +5,6 @@ import { firstValueFrom } from 'rxjs';
 import {
   NautilusRequest,
   NautilusResponse,
-  NautilusResponseData,
   BlobFilePair,
   NautilusConfig,
   ParsedNautilusResult,
@@ -41,20 +40,25 @@ export class NautilusService {
         );
       }
 
-      const parsedData: NautilusResponseData = JSON.parse(response.data);
+      const responseData = response.data;
 
-      if (parsedData.status !== 'success') {
+      if (responseData.status !== 'success') {
         throw new Error(
-          `Nautilus data operation failed with status: ${parsedData.status}`,
+          `Nautilus data operation failed with status: ${responseData.status}`,
         );
       }
 
       const results: ParsedNautilusResult[] = [];
 
-      for (const result of parsedData.results) {
+      for (const result of responseData.results) {
         if (result.status === 'success' && result.message) {
+          const msg = result.message;
+
+          // Build structured content format
+          const content = `Date: ${msg.date}, From User Id: ${msg.user_id}, Message: ${msg.message}, Conversation Id: ${msg.chat_id}, Owner User Id: ${msg.user_id}`;
+
           results.push({
-            content: result.message,
+            content,
             metadata: {
               walrus_blob_id: result.walrus_blob_id,
               on_chain_file_obj_id: result.on_chain_file_obj_id,
@@ -71,7 +75,7 @@ export class NautilusService {
       }
 
       this.logger.debug(
-        `Parsed Nautilus response: ${results.length}/${parsedData.total_requested} successful decryptions`,
+        `Parsed Nautilus response: ${results.length}/${responseData.total_requested} successful decryptions`,
       );
 
       return results;

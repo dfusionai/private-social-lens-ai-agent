@@ -16,12 +16,24 @@ export interface NautilusRequest {
   payload: NautilusRequestPayload;
 }
 
+export interface DecryptedMessageContent {
+  chat_id: number;
+  date: string;
+  edit_date: string | null;
+  from_id: string | null;
+  id: number;
+  message: string;
+  out: boolean;
+  reactions: any | null;
+  user_id: string;
+}
+
 export interface NautilusDecryptionResult {
   walrus_blob_id: string;
   on_chain_file_obj_id: string;
   policy_object_id: string;
   status: 'success' | 'failed';
-  message?: string;
+  message?: DecryptedMessageContent;
   encrypted_object_id?: string;
   attestation_obj_id?: string;
   error?: string;
@@ -39,7 +51,7 @@ export interface NautilusResponseData {
 
 export interface NautilusResponse {
   status: string;
-  data: string; // JSON string that needs to be parsed
+  data: NautilusResponseData; // Direct object, not JSON string
   stderr: string;
   exit_code: number;
   execution_time_ms: number;

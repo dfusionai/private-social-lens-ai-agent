@@ -104,6 +104,15 @@ export class ConversationsService {
     //   role: 'user',
     // });
 
+    // Get user's social ID (Telegram ID) for RAG context search
+    const user = await this.userService.findById(userId);
+    if (!user?.socialId) {
+      throw new ForbiddenException(
+        'User must have a Telegram social ID to use chat',
+      );
+    }
+    const socialId = user.socialId;
+
     // Get conversation history and enhance with RAG context
     const messages = await this.getConversationHistory(conversation.id);
 
@@ -111,7 +120,7 @@ export class ConversationsService {
     const enhancedQuery = await this.ragService.enhancePromptWithContext(
       chatDto.content,
       {
-        userId: String(userId), // Search across ALL user data
+        userId: socialId, // Use Telegram social ID for RAG search
         // conversationId: conversation.id, // Remove conversation filter
         limit: 10, // Increase limit for broader search
         threshold: 0.05, // Much lower threshold to include Emily-John conversation
@@ -224,6 +233,15 @@ export class ConversationsService {
     //   role: 'user',
     // });
 
+    // Get user's social ID (Telegram ID) for RAG context search
+    const user = await this.userService.findById(userId);
+    if (!user?.socialId) {
+      throw new ForbiddenException(
+        'User must have a Telegram social ID to use chat',
+      );
+    }
+    const socialId = user.socialId;
+
     // Get conversation history and enhance with RAG context
     const messages = await this.getConversationHistory(conversation.id);
 
@@ -231,7 +249,7 @@ export class ConversationsService {
     const enhancedQuery = await this.ragService.enhancePromptWithContext(
       chatDto.content,
       {
-        userId: String(userId), // Search across ALL user data
+        userId: socialId, // Use Telegram social ID for RAG search
         // conversationId: conversation.id, // Remove conversation filter
         limit: 10, // Increase limit for broader search
         threshold: 0.05, // Much lower threshold to include Emily-John conversation
