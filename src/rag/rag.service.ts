@@ -1,6 +1,7 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { VectorDbService, SearchResult } from '../vector-db/vector-db.service';
 import { SecureMessageService } from '../secure-message/secure-message.service';
+import { NautilusService } from '../nautilus/nautilus.service';
 
 export interface RagContext {
   query: string;
@@ -23,6 +24,7 @@ export class RagService {
 
   constructor(
     private readonly vectorDbService: VectorDbService,
+    private readonly nautilusService: NautilusService,
     @Inject(forwardRef(() => SecureMessageService))
     private readonly secureMessageService: SecureMessageService,
   ) {}
@@ -118,25 +120,90 @@ export class RagService {
   ): Promise<SearchResult[]> {
     const decryptedResults: SearchResult[] = [];
 
-    for (const result of results) {
-      try {
-        if (result.metadata.fileHash && result.metadata.isEncrypted) {
-          const decryptedMessage =
-            await this.secureMessageService.retrieveSecureMessage(
-              result.metadata.fileHash,
-            );
+    if (results.length === 0) {
+      return decryptedResults;
+    }
 
-          decryptedResults.push({
-            ...result,
-            content: decryptedMessage.content,
-          });
-        } else {
-          decryptedResults.push(result);
+    // Group results by address for batching (all messages are encrypted)
+    const groupedByAddress = new Map<string, SearchResult[]>();
+    const invalidResults: SearchResult[] = [];
+
+    for (const result of results) {
+      const {
+        walrus_blob_id,
+        on_chain_file_obj_id,
+        policy_object_id,
+        request_address,
+      } = result.metadata;
+
+      if (
+        walrus_blob_id &&
+        on_chain_file_obj_id &&
+        policy_object_id &&
+        request_address
+      ) {
+        if (!groupedByAddress.has(request_address)) {
+          groupedByAddress.set(request_address, []);
+        }
+        groupedByAddress.get(request_address)!.push(result);
+      } else {
+        // Results missing required Nautilus metadata
+        this.logger.warn(
+          `Missing Nautilus metadata for result ${result.id}, skipping. Required: walrus_blob_id, on_chain_file_obj_id, policy_object_id, request_address`,
+        );
+        invalidResults.push(result);
+      }
+    }
+
+    // Process batched Nautilus requests
+    for (const [address, addressResults] of groupedByAddress) {
+      try {
+        const blobFilePairs = addressResults.map((result) => ({
+          walrusBlobId: result.metadata.walrus_blob_id,
+          onChainFileObjId: result.metadata.on_chain_file_obj_id,
+          policyObjectId: result.metadata.policy_object_id,
+        }));
+
+        this.logger.debug(
+          `Batching ${blobFilePairs.length} Nautilus requests for address: ${address}`,
+        );
+
+        const rawMessages =
+          await this.nautilusService.retrieveMultipleRawMessages(
+            blobFilePairs,
+            address,
+          );
+
+        // Map results back to search results by walrusBlobId
+        const messageMap = new Map(
+          rawMessages.map((msg) => [msg.metadata?.walrus_blob_id, msg.content]),
+        );
+
+        for (const result of addressResults) {
+          const content = messageMap.get(result.metadata.walrus_blob_id);
+          if (content) {
+            decryptedResults.push({
+              ...result,
+              content,
+            });
+          } else {
+            this.logger.warn(
+              `No content found for blob ${result.metadata.walrus_blob_id}, skipping`,
+            );
+          }
         }
       } catch (error) {
-        this.logger.warn(
-          `Failed to decrypt message with hash ${result.metadata.fileHash}, skipping. ${error}`,
+        this.logger.error(
+          `Failed to batch decrypt messages for address ${address}:`,
+          error,
         );
+
+        // Skip these results as we cannot decrypt them
+        for (const result of addressResults) {
+          this.logger.warn(
+            `Skipping result ${result.id} due to decryption failure for address ${address}`,
+          );
+        }
       }
     }
 
