@@ -62,6 +62,10 @@ CLAUDE_API_KEY=your-claude-api-key-here
 # Gemini Configuration
 GEMINI_API_KEY=your-gemini-api-key-here
 
+# Ollama Configuration
+OLLAMA_URL=http://ollama:11434
+OLLAMA_DEFAULT_MODEL=llama3.2
+
 # Vector Database Configuration (RAG)
 VECTOR_DB_PROVIDER=qdrant
 VECTOR_DB_COLLECTION_NAME=Nautilus_messages

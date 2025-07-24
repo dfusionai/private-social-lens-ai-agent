@@ -9,6 +9,7 @@ import mailConfig from './mail/config/mail.config';
 import fileConfig from './files/config/file.config';
 import openaiConfig from './model-api/config/openai.config';
 import claudeConfig from './model-api/config/claude.config';
+import ollamaConfig from './model-api/config/ollama.config';
 import path from 'path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -45,6 +46,7 @@ import { MessagesModule } from './messages/messages.module';
         fileConfig,
         openaiConfig,
         claudeConfig,
+        ollamaConfig,
       ],
       envFilePath: ['.env'],
     }),

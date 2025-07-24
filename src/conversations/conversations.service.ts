@@ -132,7 +132,7 @@ export class ConversationsService {
       messages[messages.length - 1].content = enhancedQuery;
     }
 
-    const provider = chatDto.options?.provider || ModelProvider.CLAUDE;
+    const provider = chatDto.options?.provider || ModelProvider.OLLAMA;
     const modelService = this.modelApiFactory.getModelService(provider);
 
     // Log the complete prompt sent to AI model
@@ -262,7 +262,7 @@ export class ConversationsService {
     }
 
     // Get the model service
-    const provider = chatDto.options?.provider || ModelProvider.GEMINI;
+    const provider = chatDto.options?.provider || ModelProvider.OLLAMA;
     const modelService = this.modelApiFactory.getModelService(provider);
 
     // Log the complete prompt sent to AI model (streaming)
