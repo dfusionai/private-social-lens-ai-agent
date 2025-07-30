@@ -2,3 +2,6 @@
 /.data
 /dist
 /files
+.env
+.env.k8s
+.env.*
