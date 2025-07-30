@@ -55,7 +55,7 @@ export class NautilusService {
           const msg = result.message;
 
           // Build structured content format
-          const content = `Date: ${msg.date}, From User Id: ${msg.user_id}, Message: ${msg.message}, Conversation Id: ${msg.chat_id}, Owner User Id: ${msg.user_id}`;
+          const content = `Sent at: ${msg.date}, Sent by user ID: ${msg.user_id}, Message: ${msg.message}, Conversation Id: ${msg.chat_id}, Current User Id: ${msg.user_id}`;
 
           results.push({
             content,
@@ -63,6 +63,7 @@ export class NautilusService {
               walrus_blob_id: result.walrus_blob_id,
               on_chain_file_obj_id: result.on_chain_file_obj_id,
               policy_object_id: result.policy_object_id,
+              message_index: result.message_index,
               encrypted_object_id: result.encrypted_object_id,
               attestation_obj_id: result.attestation_obj_id,
             },
@@ -179,6 +180,10 @@ export class NautilusService {
 
       this.logger.debug(
         `Retrieving ${blobFilePairs.length} raw messages from Nautilus`,
+      );
+
+      this.logger.debug(
+        `Request payload: ${JSON.stringify(request.payload, null, 2)}`,
       );
 
       const response = await firstValueFrom(

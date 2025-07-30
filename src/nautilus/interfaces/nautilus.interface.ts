@@ -2,6 +2,7 @@ export interface BlobFilePair {
   walrusBlobId: string;
   onChainFileObjId: string;
   policyObjectId: string;
+  messageIndices?: number[];
 }
 
 export interface NautilusRequestPayload {
@@ -34,6 +35,7 @@ export interface NautilusDecryptionResult {
   policy_object_id: string;
   status: 'success' | 'failed';
   message?: DecryptedMessageContent;
+  message_index?: number;
   encrypted_object_id?: string;
   attestation_obj_id?: string;
   error?: string;
@@ -63,6 +65,7 @@ export interface ParsedNautilusResult {
     walrus_blob_id: string;
     on_chain_file_obj_id: string;
     policy_object_id: string;
+    message_index?: number;
     encrypted_object_id?: string;
     attestation_obj_id?: string;
   };

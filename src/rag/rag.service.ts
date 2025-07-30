@@ -124,48 +124,78 @@ export class RagService {
       return decryptedResults;
     }
 
-    // Group results by address for batching (all messages are encrypted)
-    const groupedByAddress = new Map<string, SearchResult[]>();
+    // Group results by address and policy for batching (all messages are encrypted)
+    const groupedByAddressAndPolicy = new Map<string, SearchResult[]>();
     const invalidResults: SearchResult[] = [];
 
     for (const result of results) {
       const {
-        walrus_blob_id,
-        on_chain_file_obj_id,
+        refined_file_blob_id,
+        refined_file_on_chain_id,
         policy_object_id,
         request_address,
+        message_index,
       } = result.metadata;
 
       if (
-        walrus_blob_id &&
-        on_chain_file_obj_id &&
+        refined_file_blob_id &&
+        refined_file_on_chain_id &&
         policy_object_id &&
-        request_address
+        request_address &&
+        message_index !== undefined
       ) {
-        if (!groupedByAddress.has(request_address)) {
-          groupedByAddress.set(request_address, []);
+        // Group by address and policy to batch requests efficiently
+        const groupKey = `${request_address}:${policy_object_id}`;
+        if (!groupedByAddressAndPolicy.has(groupKey)) {
+          groupedByAddressAndPolicy.set(groupKey, []);
         }
-        groupedByAddress.get(request_address)!.push(result);
+        groupedByAddressAndPolicy.get(groupKey)!.push(result);
       } else {
         // Results missing required Nautilus metadata
         this.logger.warn(
-          `Missing Nautilus metadata for result ${result.id}, skipping. Required: walrus_blob_id, on_chain_file_obj_id, policy_object_id, request_address`,
+          `Missing Nautilus metadata for result ${result.id}, skipping. Required: refined_file_blob_id, refined_file_on_chain_id, policy_object_id, request_address, message_index`,
         );
         invalidResults.push(result);
       }
     }
 
     // Process batched Nautilus requests
-    for (const [address, addressResults] of groupedByAddress) {
+    for (const [groupKey, groupResults] of groupedByAddressAndPolicy) {
+      const [address] = groupKey.split(':');
+
       try {
-        const blobFilePairs = addressResults.map((result) => ({
-          walrusBlobId: result.metadata.walrus_blob_id,
-          onChainFileObjId: result.metadata.on_chain_file_obj_id,
-          policyObjectId: result.metadata.policy_object_id,
-        }));
+        // Group by blob files and collect message indices
+        const blobFileMap = new Map<
+          string,
+          {
+            walrusBlobId: string;
+            onChainFileObjId: string;
+            policyObjectId: string;
+            messageIndices: number[];
+          }
+        >();
+
+        for (const result of groupResults) {
+          const blobKey = `${result.metadata.refined_file_blob_id}:${result.metadata.refined_file_on_chain_id}`;
+
+          if (!blobFileMap.has(blobKey)) {
+            blobFileMap.set(blobKey, {
+              walrusBlobId: result.metadata.refined_file_blob_id,
+              onChainFileObjId: result.metadata.refined_file_on_chain_id,
+              policyObjectId: result.metadata.policy_object_id,
+              messageIndices: [],
+            });
+          }
+
+          blobFileMap
+            .get(blobKey)!
+            .messageIndices.push(result.metadata.message_index);
+        }
+
+        const blobFilePairs = Array.from(blobFileMap.values());
 
         this.logger.debug(
-          `Batching ${blobFilePairs.length} Nautilus requests for address: ${address}`,
+          `Batching ${blobFilePairs.length} blob files with ${groupResults.length} total message indices for address: ${address}`,
         );
 
         const rawMessages =
@@ -174,13 +204,17 @@ export class RagService {
             address,
           );
 
-        // Map results back to search results by walrusBlobId
+        // Map results back to search results by walrusBlobId + messageIndex
         const messageMap = new Map(
-          rawMessages.map((msg) => [msg.metadata?.walrus_blob_id, msg.content]),
+          rawMessages.map((msg) => [
+            `${msg.metadata?.walrus_blob_id}:${msg.metadata?.message_index}`,
+            msg.content,
+          ]),
         );
 
-        for (const result of addressResults) {
-          const content = messageMap.get(result.metadata.walrus_blob_id);
+        for (const result of groupResults) {
+          const lookupKey = `${result.metadata.refined_file_blob_id}:${result.metadata.message_index}`;
+          const content = messageMap.get(lookupKey);
           if (content) {
             decryptedResults.push({
               ...result,
@@ -188,7 +222,7 @@ export class RagService {
             });
           } else {
             this.logger.warn(
-              `No content found for blob ${result.metadata.walrus_blob_id}, skipping`,
+              `No content found for blob ${result.metadata.refined_file_blob_id} with message index ${result.metadata.message_index}, skipping`,
             );
           }
         }
@@ -199,7 +233,7 @@ export class RagService {
         );
 
         // Skip these results as we cannot decrypt them
-        for (const result of addressResults) {
+        for (const result of groupResults) {
           this.logger.warn(
             `Skipping result ${result.id} due to decryption failure for address ${address}`,
           );
@@ -246,8 +280,7 @@ Provide only the response message - no explanations, metadata, or system notes.
     }
 
     const contextParts = documents.map((doc) => {
-      const timestamp =
-        doc.metadata.originalTimestamp || doc.metadata.timestamp || 'Unknown';
+      const timestamp = doc.metadata.date || 'Unknown';
       const formattedTimestamp =
         timestamp !== 'Unknown' ? new Date(timestamp).toISOString() : 'Unknown';
 
