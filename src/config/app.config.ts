@@ -72,6 +72,6 @@ export default registerAs<AppConfig>('app', () => {
     headerLanguage: process.env.APP_HEADER_LANGUAGE || 'x-custom-lang',
     i18nWatchFiles: process.env.APP_I18N_WATCH_FILES
       ? process.env.APP_I18N_WATCH_FILES.toLowerCase() === 'true'
-      : true,
+      : false,
   };
 });
