@@ -9,4 +9,12 @@ export class AuthTelegramLoginDto {
   @IsString()
   @IsNotEmpty()
   sessionString: string;
+
+  @ApiProperty({
+    example: '123456789',
+    description: 'Telegram user ID',
+  })
+  @IsString()
+  @IsNotEmpty()
+  telegramId: number;
 }
