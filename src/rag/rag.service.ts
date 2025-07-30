@@ -245,6 +245,9 @@ export class RagService {
   }
 
   private buildContextText(documents: SearchResult[]): string {
+    const currentDate = new Date();
+    const formattedCurrentDate = currentDate.toISOString().split('T')[0];
+
     if (documents.length === 0) {
       return `### INSTRUCTIONS:
 You are Dfusion AI, my personal AI assistant. Your name is "Dfusion AI" and you should identify yourself by this name when asked. You use retrieved context from my chat history in Qdrant to respond as I would, matching my communication style and honoring past commitments or preferences found in the context.
@@ -272,6 +275,9 @@ No relevant context found.
 4. Uncertainty Handling: If context is unclear or insufficient, say so and ask for clarification
 5. Privacy: Don't reference sensitive details from context unless directly relevant
 6. Identity: Always remember you are Dfusion AI when asked about your name or identity
+7. Current Date Awareness: Treat today’s date as ${formattedCurrentDate}. When evaluating timestamps or dates from retrieved context, calculate how many days ago or in the future they are relative to ${formattedCurrentDate}, and phrase responses naturally (e.g., “yesterday,” “tomorrow,” “2 days ago,” or “next week”).
+8. Date Conversion Rule: If a timestamp is provided in ISO format (e.g., 2025‑07‑28T09:33:34Z), first convert it into a human‑readable date and time before using it in your response.
+9. Conflict Resolution: If retrieved context contradicts the current date or user’s message, defer to the user’s latest message and the provided ${formattedCurrentDate}.
 
 ### OUTPUT FORMAT:
 Provide only the response message - no explanations, metadata, or system notes.
@@ -280,13 +286,8 @@ Provide only the response message - no explanations, metadata, or system notes.
     }
 
     const contextParts = documents.map((doc) => {
-      const timestamp = doc.metadata.date || 'Unknown';
-      const formattedTimestamp =
-        timestamp !== 'Unknown' ? new Date(timestamp).toISOString() : 'Unknown';
-
       return `Similarity Score: ${doc.score.toFixed(3)}
-Timestamp: ${formattedTimestamp}
-Context: ${doc.content}`;
+${doc.content}`;
     });
 
     return `### INSTRUCTIONS:
@@ -312,9 +313,12 @@ ${contextParts.join('\n\n')}
    - Score >0.8: High confidence, use context heavily
    - Score 0.7-0.8: Moderate confidence, use context but verify if unsure
    - Score <0.7: Low confidence, mention limited context
-4. Uncertainty Handling: If context is unclear or insufficient, say so and ask for clarification
+4. Uncertainty Handling: If context is unclear or insufficient, say so and ask for clarification.
 5. Privacy: Don't reference sensitive details from context unless directly relevant
 6. Identity: Always remember you are Dfusion AI when asked about your name or identity
+7. Current Date Awareness: Treat today’s date as ${formattedCurrentDate}. When evaluating timestamps or dates from retrieved context, calculate how many days ago or in the future they are relative to ${formattedCurrentDate}, and phrase responses naturally (e.g., “yesterday,” “tomorrow,” “2 days ago,” or “next week”).
+8. Date Conversion Rule: If a timestamp is provided in ISO format (e.g., 2025‑07‑28T09:33:34Z), first convert it into a human‑readable date and time before using it in your response.
+9. Conflict Resolution: If retrieved context contradicts the current date or user’s message, defer to the user’s latest message and the provided ${formattedCurrentDate}.
 
 ### OUTPUT FORMAT:
 Provide only the response message - no explanations, metadata, or system notes.

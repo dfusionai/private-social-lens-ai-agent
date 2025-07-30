@@ -54,8 +54,21 @@ export class NautilusService {
         if (result.status === 'success' && result.message) {
           const msg = result.message;
 
-          // Build structured content format
-          const content = `Sent at: ${msg.date}, Sent by user ID: ${msg.user_id}, Message: ${msg.message}, Conversation Id: ${msg.chat_id}, Current User Id: ${msg.user_id}`;
+          const isYou = msg.user_id == msg.from_id;
+          const speaker = isYou ? 'You' : `Someone (ID: ${msg.from_id})`;
+          const date = new Date(msg.date).toLocaleString();
+          const message = msg.message || 'No message content';
+          const interpretation = isYou
+            ? `On ${date}, you told someone: "${message}" on conversation (ID: ${msg.chat_id}).`
+            : `On ${date}, ${speaker} said: "${message}" on conversation (ID: ${msg.chat_id}).`;
+
+          const content = `[Conversation Context]
+- Date & Time: ${date}
+- Speaker: ${speaker}
+- Message: "${message}"
+- Conversation ID: ${msg.chat_id}
+
+📌 Interpretation: ${interpretation}`;
 
           results.push({
             content,
