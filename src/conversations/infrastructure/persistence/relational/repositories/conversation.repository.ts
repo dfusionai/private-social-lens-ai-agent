@@ -26,18 +26,27 @@ export class ConversationRelationalRepository
   }
 
   async findAllWithPagination({
+    userId,
     paginationOptions,
     withDeleted = false,
   }: {
+    userId?: string | number;
     paginationOptions: IPaginationOptions;
     withDeleted?: boolean;
   }): Promise<Conversation[]> {
+    const whereCondition: any = {};
+    if (userId) {
+      whereCondition.user = { id: userId };
+    }
+
     const entities = await this.conversationRepository.find({
+      where: whereCondition,
       skip: (paginationOptions.page - 1) * paginationOptions.limit,
       take: paginationOptions.limit,
       order: {
         createdAt: 'DESC',
       },
+      relations: ['user'],
       withDeleted,
     });
 

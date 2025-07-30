@@ -357,11 +357,14 @@ export class ConversationsService {
   }
 
   findAllWithPagination({
+    userId,
     paginationOptions,
   }: {
+    userId: User['id'];
     paginationOptions: IPaginationOptions;
   }) {
     return this.conversationRepository.findAllWithPagination({
+      userId,
       paginationOptions: {
         page: paginationOptions.page,
         limit: paginationOptions.limit,
@@ -370,6 +373,21 @@ export class ConversationsService {
   }
 
   findById(id: Conversation['id']) {
+    return this.conversationRepository.findById(id);
+  }
+
+  async findByIdAndUserId({
+    id,
+    userId,
+  }: {
+    id: Conversation['id'];
+    userId: User['id'];
+  }) {
+    await this.validateConversationOwnership({
+      conversationId: id,
+      userId,
+    });
+    // For backward compatibility when no userId is provided
     return this.conversationRepository.findById(id);
   }
 

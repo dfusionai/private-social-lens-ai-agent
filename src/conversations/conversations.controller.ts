@@ -134,6 +134,7 @@ export class ConversationsController {
     type: InfinityPaginationResponse(Conversation),
   })
   async findAll(
+    @Request() request: { user: JwtPayloadType },
     @Query() query: FindAllConversationsDto,
   ): Promise<InfinityPaginationResponseDto<Conversation>> {
     const page = query?.page ?? 1;
@@ -144,6 +145,7 @@ export class ConversationsController {
 
     return infinityPagination(
       await this.conversationsService.findAllWithPagination({
+        userId: request.user.id,
         paginationOptions: {
           page,
           limit,
@@ -200,8 +202,14 @@ export class ConversationsController {
   @ApiOkResponse({
     type: Conversation,
   })
-  findById(@Param('id') id: string) {
-    return this.conversationsService.findById(id);
+  findById(
+    @Request() request: { user: JwtPayloadType },
+    @Param('id') id: string,
+  ) {
+    return this.conversationsService.findByIdAndUserId({
+      id,
+      userId: request.user.id,
+    });
   }
 
   @Patch(':id')
