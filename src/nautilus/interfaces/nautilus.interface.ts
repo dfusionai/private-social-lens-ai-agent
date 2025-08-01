@@ -7,8 +7,6 @@ export interface BlobFilePair {
 
 export interface NautilusRequestPayload {
   blobFilePairs: BlobFilePair[];
-  address: string;
-  policyObjectId?: string;
   threshold: string;
   timeout_secs?: number;
 }

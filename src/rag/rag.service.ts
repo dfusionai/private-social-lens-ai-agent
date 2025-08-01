@@ -124,8 +124,17 @@ export class RagService {
       return decryptedResults;
     }
 
-    // Group results by address and policy for batching (all messages are encrypted)
-    const groupedByAddressAndPolicy = new Map<string, SearchResult[]>();
+    // Group results by walrusBlobId for batching (all messages are encrypted)
+    const blobFileMap = new Map<
+      string,
+      {
+        walrusBlobId: string;
+        onChainFileObjId: string;
+        policyObjectId: string;
+        messageIndices: number[];
+        results: SearchResult[];
+      }
+    >();
     const invalidResults: SearchResult[] = [];
 
     for (const result of results) {
@@ -133,7 +142,6 @@ export class RagService {
         refined_file_blob_id,
         refined_file_on_chain_id,
         policy_object_id,
-        request_address,
         message_index,
       } = result.metadata;
 
@@ -141,68 +149,54 @@ export class RagService {
         refined_file_blob_id &&
         refined_file_on_chain_id &&
         policy_object_id &&
-        request_address &&
         message_index !== undefined
       ) {
-        // Group by address and policy to batch requests efficiently
-        const groupKey = `${request_address}:${policy_object_id}`;
-        if (!groupedByAddressAndPolicy.has(groupKey)) {
-          groupedByAddressAndPolicy.set(groupKey, []);
+        // Group by walrusBlobId to batch requests efficiently
+        if (!blobFileMap.has(refined_file_blob_id)) {
+          blobFileMap.set(refined_file_blob_id, {
+            walrusBlobId: refined_file_blob_id,
+            onChainFileObjId: refined_file_on_chain_id,
+            policyObjectId: policy_object_id,
+            messageIndices: [],
+            results: [],
+          });
         }
-        groupedByAddressAndPolicy.get(groupKey)!.push(result);
+
+        const blobData = blobFileMap.get(refined_file_blob_id)!;
+        blobData.messageIndices.push(message_index);
+        blobData.results.push(result);
       } else {
         // Results missing required Nautilus metadata
         this.logger.warn(
-          `Missing Nautilus metadata for result ${result.id}, skipping. Required: refined_file_blob_id, refined_file_on_chain_id, policy_object_id, request_address, message_index`,
+          `Missing Nautilus metadata for result ${result.id}, skipping. Required: refined_file_blob_id, refined_file_on_chain_id, policy_object_id, message_index`,
         );
         invalidResults.push(result);
       }
     }
 
-    // Process batched Nautilus requests
-    for (const [groupKey, groupResults] of groupedByAddressAndPolicy) {
-      const [address] = groupKey.split(':');
-
+    // Process all blobFilePairs in a single batched Nautilus request
+    if (blobFileMap.size > 0) {
       try {
-        // Group by blob files and collect message indices
-        const blobFileMap = new Map<
-          string,
-          {
-            walrusBlobId: string;
-            onChainFileObjId: string;
-            policyObjectId: string;
-            messageIndices: number[];
-          }
-        >();
+        const blobFilePairs = Array.from(blobFileMap.values()).map(
+          (blobData) => ({
+            walrusBlobId: blobData.walrusBlobId,
+            onChainFileObjId: blobData.onChainFileObjId,
+            policyObjectId: blobData.policyObjectId,
+            messageIndices: blobData.messageIndices,
+          }),
+        );
 
-        for (const result of groupResults) {
-          const blobKey = `${result.metadata.refined_file_blob_id}:${result.metadata.refined_file_on_chain_id}`;
-
-          if (!blobFileMap.has(blobKey)) {
-            blobFileMap.set(blobKey, {
-              walrusBlobId: result.metadata.refined_file_blob_id,
-              onChainFileObjId: result.metadata.refined_file_on_chain_id,
-              policyObjectId: result.metadata.policy_object_id,
-              messageIndices: [],
-            });
-          }
-
-          blobFileMap
-            .get(blobKey)!
-            .messageIndices.push(result.metadata.message_index);
-        }
-
-        const blobFilePairs = Array.from(blobFileMap.values());
+        const totalMessageIndices = blobFilePairs.reduce(
+          (sum, pair) => sum + pair.messageIndices.length,
+          0,
+        );
 
         this.logger.debug(
-          `Batching ${blobFilePairs.length} blob files with ${groupResults.length} total message indices for address: ${address}`,
+          `Batching ${blobFilePairs.length} blob files with ${totalMessageIndices} total message indices`,
         );
 
         const rawMessages =
-          await this.nautilusService.retrieveMultipleRawMessages(
-            blobFilePairs,
-            address,
-          );
+          await this.nautilusService.retrieveMultipleRawMessages(blobFilePairs);
 
         // Map results back to search results by walrusBlobId + messageIndex
         const messageMap = new Map(
@@ -212,31 +206,36 @@ export class RagService {
           ]),
         );
 
-        for (const result of groupResults) {
-          const lookupKey = `${result.metadata.refined_file_blob_id}:${result.metadata.message_index}`;
-          const content = messageMap.get(lookupKey);
-          if (content) {
-            decryptedResults.push({
-              ...result,
-              content,
-            });
-          } else {
-            this.logger.warn(
-              `No content found for blob ${result.metadata.refined_file_blob_id} with message index ${result.metadata.message_index}, skipping`,
-            );
+        // Process all results from all blobs
+        for (const [, blobData] of blobFileMap) {
+          for (const result of blobData.results) {
+            const lookupKey = `${result.metadata.refined_file_blob_id}:${result.metadata.message_index}`;
+            const content = messageMap.get(lookupKey);
+            if (content) {
+              decryptedResults.push({
+                ...result,
+                content,
+              });
+            } else {
+              this.logger.warn(
+                `No content found for blob ${result.metadata.refined_file_blob_id} with message index ${result.metadata.message_index}, skipping`,
+              );
+            }
           }
         }
       } catch (error) {
         this.logger.error(
-          `Failed to batch decrypt messages for address ${address}:`,
+          `Failed to batch decrypt messages for ${blobFileMap.size} blobs:`,
           error,
         );
 
-        // Skip these results as we cannot decrypt them
-        for (const result of groupResults) {
-          this.logger.warn(
-            `Skipping result ${result.id} due to decryption failure for address ${address}`,
-          );
+        // Skip all results as we cannot decrypt them
+        for (const [, blobData] of blobFileMap) {
+          for (const result of blobData.results) {
+            this.logger.warn(
+              `Skipping result ${result.id} due to decryption failure`,
+            );
+          }
         }
       }
     }
@@ -245,85 +244,38 @@ export class RagService {
   }
 
   private buildContextText(documents: SearchResult[]): string {
-    const currentDate = new Date();
-    const formattedCurrentDate = currentDate.toISOString().split('T')[0];
-
     if (documents.length === 0) {
-      return `### INSTRUCTIONS:
-You are Dfusion AI, my personal AI assistant. Your name is "Dfusion AI" and you should identify yourself by this name when asked. You use retrieved context from my chat history in Qdrant to respond as I would, matching my communication style and honoring past commitments or preferences found in the context.
+      return `You are an information retrieval assistant that summarizes content from Telegram chat history.
 
-### AI IDENTITY:
-- Your name is: Dfusion AI
-- When asked about your name, respond that you are Dfusion AI
-- You are a personal AI assistant
+CHAT HISTORY:
+No relevant data found.
 
-### CONTEXT RELEVANCE:
-- Context score threshold: Use context with similarity > 0.7
-- If multiple contexts conflict, prioritize the most recent (highest timestamp)
-- If context seems irrelevant or fragmented, rely on general reasoning
-
-### RETRIEVED CONTEXT:
-No relevant context found.
-
-### RESPONSE GUIDELINES:
-1. Style Matching: Mirror my typical tone, formality level, and response length patterns from context
-2. Consistency: Respect prior agreements, opinions, and relationship dynamics shown in context
-3. Context Quality: 
-   - Score >0.8: High confidence, use context heavily
-   - Score 0.7-0.8: Moderate confidence, use context but verify if unsure
-   - Score <0.7: Low confidence, mention limited context
-4. Uncertainty Handling: If context is unclear or insufficient, say so and ask for clarification
-5. Privacy: Don't reference sensitive details from context unless directly relevant
-6. Identity: Always remember you are Dfusion AI when asked about your name or identity
-7. Current Date Awareness: Treat today’s date as ${formattedCurrentDate}. When evaluating timestamps or dates from retrieved context, calculate how many days ago or in the future they are relative to ${formattedCurrentDate}, and phrase responses naturally (e.g., “yesterday,” “tomorrow,” “2 days ago,” or “next week”).
-8. Date Conversion Rule: If a timestamp is provided in ISO format (e.g., 2025‑07‑28T09:33:34Z), first convert it into a human‑readable date and time before using it in your response.
-9. Conflict Resolution: If retrieved context contradicts the current date or user’s message, defer to the user’s latest message and the provided ${formattedCurrentDate}.
-
-### OUTPUT FORMAT:
-Provide only the response message - no explanations, metadata, or system notes.
-
-### RESPONSE:`;
+INSTRUCTIONS:
+- Only summarize and present information that exists in chat history
+- If no relevant information found, respond: "I couldn’t find any chat history related to your question."
+- Do not promise actions or services you cannot perform
+- Do not mention sending emails, notifications, or any external actions
+- Do not use emojis or icons
+- Focus only on retrieving and presenting existing information`;
     }
 
     const contextParts = documents.map((doc) => {
-      return `Similarity Score: ${doc.score.toFixed(3)}
-${doc.content}`;
+      return `${doc.content}`;
     });
 
-    return `### INSTRUCTIONS:
-You are Dfusion AI, my personal AI assistant. Your name is "Dfusion AI" and you should identify yourself by this name when asked. You use retrieved context from my chat history in Qdrant to respond as I would, matching my communication style and honoring past commitments or preferences found in the context.
+    return `You are an information retrieval assistant that summarizes content from Telegram chat history.
 
-### AI IDENTITY:
-- Your name is: Dfusion AI
-- When asked about your name, respond that you are Dfusion AI
-- You are a personal AI assistant
-
-### CONTEXT RELEVANCE:
-- Context score threshold: Use context with similarity > 0.7
-- If multiple contexts conflict, prioritize the most recent (highest timestamp)
-- If context seems irrelevant or fragmented, rely on general reasoning
-
-### RETRIEVED CONTEXT:
+CHAT HISTORY:
 ${contextParts.join('\n\n')}
 
-### RESPONSE GUIDELINES:
-1. Style Matching: Mirror my typical tone, formality level, and response length patterns from context
-2. Consistency: Respect prior agreements, opinions, and relationship dynamics shown in context
-3. Context Quality: 
-   - Score >0.8: High confidence, use context heavily
-   - Score 0.7-0.8: Moderate confidence, use context but verify if unsure
-   - Score <0.7: Low confidence, mention limited context
-4. Uncertainty Handling: If context is unclear or insufficient, say so and ask for clarification.
-5. Privacy: Don't reference sensitive details from context unless directly relevant
-6. Identity: Always remember you are Dfusion AI when asked about your name or identity
-7. Current Date Awareness: Treat today’s date as ${formattedCurrentDate}. When evaluating timestamps or dates from retrieved context, calculate how many days ago or in the future they are relative to ${formattedCurrentDate}, and phrase responses naturally (e.g., “yesterday,” “tomorrow,” “2 days ago,” or “next week”).
-8. Date Conversion Rule: If a timestamp is provided in ISO format (e.g., 2025‑07‑28T09:33:34Z), first convert it into a human‑readable date and time before using it in your response.
-9. Conflict Resolution: If retrieved context contradicts the current date or user’s message, defer to the user’s latest message and the provided ${formattedCurrentDate}.
-
-### OUTPUT FORMAT:
-Provide only the response message - no explanations, metadata, or system notes.
-
-### RESPONSE:`;
+INSTRUCTIONS:
+- Only summarize and present information that exists in the chat history above
+- Give direct, concise answers without explanations or analysis
+- Do not promise actions or services you cannot perform
+- Do not mention sending emails, notifications, or any external actions
+- Do not ask questions or suggest follow-up actions
+- Do not use emojis or icons
+- Focus only on retrieving and presenting existing information`;
   }
 
   async enhancePromptWithContext(

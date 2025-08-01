@@ -52,35 +52,37 @@ export class NautilusService {
 
       for (const result of responseData.results) {
         if (result.status === 'success' && result.message) {
+          this.logger.debug(
+            `Successfully decrypted message: ${JSON.stringify(result.message)}`,
+          );
+
           const msg = result.message;
 
           const isYou = msg.user_id == msg.from_id;
           const speaker = isYou ? 'You' : `Someone (ID: ${msg.from_id})`;
           const date = new Date(msg.date).toLocaleString();
-          const message = msg.message || 'No message content';
+          const hasMessage = msg.message && msg.message.trim().length > 0;
+          const message = msg.message;
           const interpretation = isYou
             ? `On ${date}, you told someone: "${message}" on conversation (ID: ${msg.chat_id}).`
             : `On ${date}, ${speaker} said: "${message}" on conversation (ID: ${msg.chat_id}).`;
 
-          const content = `[Conversation Context]
-- Date & Time: ${date}
-- Speaker: ${speaker}
-- Message: "${message}"
-- Conversation ID: ${msg.chat_id}
+          const content = `Timestamp: ${msg.date}
+Context: ${interpretation}`;
 
-📌 Interpretation: ${interpretation}`;
-
-          results.push({
-            content,
-            metadata: {
-              walrus_blob_id: result.walrus_blob_id,
-              on_chain_file_obj_id: result.on_chain_file_obj_id,
-              policy_object_id: result.policy_object_id,
-              message_index: result.message_index,
-              encrypted_object_id: result.encrypted_object_id,
-              attestation_obj_id: result.attestation_obj_id,
-            },
-          });
+          if (hasMessage) {
+            results.push({
+              content,
+              metadata: {
+                walrus_blob_id: result.walrus_blob_id,
+                on_chain_file_obj_id: result.on_chain_file_obj_id,
+                policy_object_id: result.policy_object_id,
+                message_index: result.message_index,
+                encrypted_object_id: result.encrypted_object_id,
+                attestation_obj_id: result.attestation_obj_id,
+              },
+            });
+          }
         } else {
           this.logger.warn(
             `Failed to decrypt blob ${result.walrus_blob_id}: ${result.error || 'Unknown error'}`,
@@ -103,7 +105,6 @@ export class NautilusService {
     walrusBlobId: string,
     onChainFileObjId: string,
     policyObjectId: string,
-    address: string,
     options?: {
       threshold?: string;
       timeout_secs?: number;
@@ -119,8 +120,6 @@ export class NautilusService {
       const request: NautilusRequest = {
         payload: {
           blobFilePairs: [blobFilePair],
-          address,
-          policyObjectId,
           threshold: options?.threshold || this.config.defaultThreshold,
           timeout_secs: options?.timeout_secs || this.config.defaultTimeout,
         },
@@ -173,9 +172,7 @@ export class NautilusService {
 
   async retrieveMultipleRawMessages(
     blobFilePairs: BlobFilePair[],
-    address: string,
     options?: {
-      policyObjectId?: string;
       threshold?: string;
       timeout_secs?: number;
     },
@@ -184,8 +181,6 @@ export class NautilusService {
       const request: NautilusRequest = {
         payload: {
           blobFilePairs,
-          address,
-          policyObjectId: options?.policyObjectId,
           threshold: options?.threshold || this.config.defaultThreshold,
           timeout_secs: options?.timeout_secs || this.config.defaultTimeout,
         },
