@@ -26,6 +26,7 @@ import { GetUser } from '../users/decorators/get-user.decorator';
 import { User } from '../users/domain/user';
 import { JobProducerService } from './services/job-producer.service';
 import { JobMonitoringService } from './services/job-monitoring.service';
+import { JobRecoveryService } from './services/job-recovery.service';
 import { CreateJobDto } from './dto/create-job.dto';
 import { JobStatusDto } from './dto/job-status.dto';
 import { FindJobsDto } from './dto/find-jobs.dto';
@@ -41,6 +42,7 @@ export class JobsController {
   constructor(
     private readonly jobProducer: JobProducerService,
     private readonly jobMonitoring: JobMonitoringService,
+    private readonly jobRecovery: JobRecoveryService,
   ) {}
 
   @Post('data-processing')
@@ -199,5 +201,50 @@ export class JobsController {
   @Roles(RoleEnum.admin)
   async getQueueHealth(): Promise<QueueHealthDto> {
     return await this.jobMonitoring.getQueueHealth();
+  }
+
+  @Post('recovery/stuck-jobs')
+  @ApiOperation({
+    summary: 'Recover stuck jobs',
+    description:
+      'Manually trigger recovery of jobs stuck in processing state (admin only)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Job recovery completed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        recoveredCount: {
+          type: 'number',
+          example: 3,
+          description: 'Number of jobs successfully recovered',
+        },
+        failedCount: {
+          type: 'number',
+          example: 1,
+          description: 'Number of jobs that failed to recover',
+        },
+        totalStuckJobs: {
+          type: 'number',
+          example: 4,
+          description: 'Total number of stuck jobs found',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Insufficient permissions',
+  })
+  @UseGuards(RolesGuard)
+  @Roles(RoleEnum.admin)
+  @HttpCode(HttpStatus.OK)
+  async recoverStuckJobs(): Promise<{
+    recoveredCount: number;
+    failedCount: number;
+    totalStuckJobs: number;
+  }> {
+    return await this.jobRecovery.triggerManualRecovery();
   }
 }

@@ -7,6 +7,7 @@ import { PgBossQueueService } from './services/pg-boss-queue.service';
 import { JobProducerService } from './services/job-producer.service';
 import { JobConsumerService } from './services/job-consumer.service';
 import { JobMonitoringService } from './services/job-monitoring.service';
+import { JobRecoveryService } from './services/job-recovery.service';
 import { NautilusModule } from '../nautilus/nautilus.module';
 import { UsersModule } from '../users/users.module';
 import jobConfig from './config/job.config';
@@ -25,6 +26,7 @@ import jobConfig from './config/job.config';
     JobProducerService,
     JobConsumerService,
     JobMonitoringService,
+    JobRecoveryService,
   ],
   exports: [JobProducerService, JobMonitoringService, PgBossQueueService],
 })

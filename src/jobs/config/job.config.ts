@@ -1,21 +1,10 @@
 import { registerAs } from '@nestjs/config';
-import {
-  IsString,
-  IsOptional,
-  IsBoolean,
-  IsNumber,
-  IsEnum,
-} from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsEnum } from 'class-validator';
 import { Transform } from 'class-transformer';
 import validateConfig from '../../utils/validate-config';
 import { JobConfig } from './job-config.type';
 
 class EnvironmentVariablesValidator {
-  @IsOptional()
-  @IsBoolean()
-  @Transform(({ value }) => value === 'true')
-  JOB_QUEUE_ENABLED: boolean;
-
   @IsOptional()
   @IsNumber()
   @Transform(({ value }) => parseInt(value, 10))
@@ -42,16 +31,6 @@ class EnvironmentVariablesValidator {
   TEE_PROCESS_TIMEOUT: number;
 
   @IsOptional()
-  @IsNumber()
-  @Transform(({ value }) => parseInt(value, 10))
-  TEE_MAX_CONCURRENT: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Transform(({ value }) => parseInt(value, 10))
-  TEE_BATCH_SIZE: number;
-
-  @IsOptional()
   @IsString()
   WORKER_INSTANCE_ID: string;
 
@@ -64,7 +43,6 @@ export default registerAs<JobConfig>('job', () => {
   validateConfig(process.env, EnvironmentVariablesValidator);
 
   return {
-    enabled: process.env.JOB_QUEUE_ENABLED === 'true',
     workerCount: process.env.JOB_WORKER_COUNT
       ? parseInt(process.env.JOB_WORKER_COUNT, 10)
       : 1,
@@ -80,12 +58,6 @@ export default registerAs<JobConfig>('job', () => {
     teeProcessTimeout: process.env.TEE_PROCESS_TIMEOUT
       ? parseInt(process.env.TEE_PROCESS_TIMEOUT, 10)
       : 300000,
-    teeMaxConcurrent: process.env.TEE_MAX_CONCURRENT
-      ? parseInt(process.env.TEE_MAX_CONCURRENT, 10)
-      : 4,
-    teeBatchSize: process.env.TEE_BATCH_SIZE
-      ? parseInt(process.env.TEE_BATCH_SIZE, 10)
-      : 1,
     workerInstanceId:
       process.env.WORKER_INSTANCE_ID ||
       `worker-${process.env.HOSTNAME || 'local'}-${Date.now()}`,
