@@ -10,6 +10,7 @@ import fileConfig from './files/config/file.config';
 import openaiConfig from './model-api/config/openai.config';
 import claudeConfig from './model-api/config/claude.config';
 import ollamaConfig from './model-api/config/ollama.config';
+import jobConfig from './jobs/config/job.config';
 import path from 'path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -31,11 +32,13 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
 
 import { ConversationsModule } from './conversations/conversations.module';
 import { MessagesModule } from './messages/messages.module';
+import { JobsModule } from './jobs/jobs.module';
 
 @Module({
   imports: [
     MessagesModule,
     ConversationsModule,
+    JobsModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [
@@ -47,6 +50,7 @@ import { MessagesModule } from './messages/messages.module';
         openaiConfig,
         claudeConfig,
         ollamaConfig,
+        jobConfig,
       ],
       envFilePath: ['.env'],
     }),

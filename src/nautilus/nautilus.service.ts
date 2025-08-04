@@ -8,6 +8,7 @@ import {
   BlobFilePair,
   NautilusConfig,
   ParsedNautilusResult,
+  ProcessDataRequest,
 } from './interfaces/nautilus.interface';
 
 @Injectable()
@@ -241,6 +242,62 @@ Context: ${interpretation}`;
     } catch (error) {
       this.logger.warn('Nautilus health check failed:', error.message);
       return false;
+    }
+  }
+
+  async processData(request: ProcessDataRequest): Promise<any> {
+    try {
+      const { payload } = request;
+      const { blobId, onchainFileId, policyId, timeout_secs } = payload;
+
+      this.logger.debug(
+        `Processing data with blobId: ${blobId}, onchainFileId: ${onchainFileId}, policyId: ${policyId}`,
+      );
+
+      // Map DTO fields to args array for the API endpoint
+      const processRequest = {
+        payload: {
+          timeout_secs: timeout_secs || 120,
+          args: [blobId, onchainFileId, policyId],
+        },
+      };
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.config.url}/process_data`,
+          processRequest,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            timeout: (timeout_secs || 120) * 1000,
+          },
+        ),
+      );
+
+      this.logger.debug(`Successfully processed data for blobId: ${blobId}`);
+
+      return {
+        status: 'success',
+        data: {
+          processed: true,
+          blobId,
+          onchainFileId,
+          policyId,
+          result: response.data,
+        },
+        version: '1.0.0',
+        message: 'TEE data processing completed successfully',
+      };
+    } catch (error) {
+      this.logger.error('Failed to process data:', error);
+      return {
+        status: 'error',
+        data: { processed: false },
+        version: '1.0.0',
+        message: `TEE data processing failed: ${error.message}`,
+        error: error.message,
+      };
     }
   }
 }
