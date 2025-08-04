@@ -33,8 +33,11 @@ import { MessagesModule } from './messages/messages.module';
 import { DocumentsModule } from './documents/documents.module';
 import { MessageImportModule } from './message-import/message-import.module';
 
+import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-configs.module';
+
 @Module({
   imports: [
+    tokenGatingConfigsModule,
     MessagesModule,
     ConversationsModule,
     DocumentsModule,
