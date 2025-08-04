@@ -112,7 +112,43 @@ export class JobConsumerService {
           error: error.message,
           duration,
         });
-        // Don't throw here - continue processing other jobs in the batch
+
+        // For single job batches (batchSize = 1), throw immediately to mark pg-boss job as failed
+        if (jobs.length === 1) {
+          throw error;
+        }
+        // For multi-job batches, continue processing other jobs
+      }
+    }
+
+    // Handle multi-job batch results
+    if (jobs.length > 1) {
+      const failedJobs = results.filter((r) => !r.success);
+      const successfulJobs = results.filter((r) => r.success);
+
+      this.logger.log(
+        `Batch completed: ${successfulJobs.length} successful, ${failedJobs.length} failed`,
+      );
+
+      // If all jobs failed, throw error to mark entire batch as failed
+      if (failedJobs.length === jobs.length) {
+        const errorMessage = `All ${jobs.length} jobs in batch failed`;
+        this.logger.error(errorMessage, {
+          failedJobIds: failedJobs.map((j) => j.jobId),
+        });
+        throw new Error(errorMessage);
+      }
+
+      // If some jobs failed but some succeeded, log details but don't throw
+      // This allows pg-boss to mark the batch as completed while we track individual failures
+      if (failedJobs.length > 0) {
+        this.logger.warn(
+          `Partial batch failure: ${failedJobs.length}/${jobs.length} jobs failed`,
+          {
+            failedJobIds: failedJobs.map((j) => j.jobId),
+            successfulJobIds: successfulJobs.map((j) => j.jobId),
+          },
+        );
       }
     }
 

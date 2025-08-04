@@ -30,6 +30,7 @@ import { CreateJobDto } from './dto/create-job.dto';
 import { JobStatusDto } from './dto/job-status.dto';
 import { FindJobsDto } from './dto/find-jobs.dto';
 import { QueueHealthDto } from './dto/job-metrics.dto';
+import { LatestCompletedJobDto } from './dto/latest-completed-job.dto';
 import { InfinityPaginationResponseDto } from '../utils/dto/infinity-pagination-response.dto';
 
 @ApiTags('Jobs')
@@ -120,6 +121,23 @@ export class JobsController {
     @Query() query: FindJobsDto,
   ): Promise<InfinityPaginationResponseDto<JobStatusDto>> {
     return await this.jobProducer.findUserJobs(user.id, query);
+  }
+
+  @Get('latest-completed-at')
+  @ApiOperation({
+    summary: 'Get latest completed job timestamp',
+    description:
+      'Get the timestamp of the most recently completed job for the current user',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Latest completed job timestamp retrieved successfully',
+    type: LatestCompletedJobDto,
+  })
+  async getLatestCompletedJobTimestamp(
+    @GetUser() user: User,
+  ): Promise<LatestCompletedJobDto> {
+    return await this.jobProducer.getLatestCompletedJob(user.id);
   }
 
   @Delete(':jobId')

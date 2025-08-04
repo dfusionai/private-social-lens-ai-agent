@@ -249,6 +249,7 @@ Context: ${interpretation}`;
     try {
       const { payload } = request;
       const { blobId, onchainFileId, policyId, timeout_secs } = payload;
+      const threshold = this.config.defaultThreshold;
 
       this.logger.debug(
         `Processing data with blobId: ${blobId}, onchainFileId: ${onchainFileId}, policyId: ${policyId}`,
@@ -258,7 +259,7 @@ Context: ${interpretation}`;
       const processRequest = {
         payload: {
           timeout_secs: timeout_secs || 120,
-          args: [blobId, onchainFileId, policyId],
+          args: [blobId, onchainFileId, policyId, threshold],
         },
       };
 

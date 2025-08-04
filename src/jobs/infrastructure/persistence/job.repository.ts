@@ -37,6 +37,10 @@ export abstract class JobRepository {
 
   abstract countByStatus(status: JobStatus): Promise<number>;
 
+  abstract findLatestCompletedByUserId(
+    userId: number | string,
+  ): Promise<NullableType<Job>>;
+
   abstract update(
     id: Job['id'],
     payload: DeepPartial<Job>,

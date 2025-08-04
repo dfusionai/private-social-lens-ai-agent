@@ -9,10 +9,12 @@ import { JobRepository } from '../infrastructure/persistence/job.repository';
 import { CreateJobDto } from '../dto/create-job.dto';
 import { JobStatusDto } from '../dto/job-status.dto';
 import { FindJobsDto } from '../dto/find-jobs.dto';
+import { LatestCompletedJobDto } from '../dto/latest-completed-job.dto';
 import { Job } from '../domain/job';
 import { JobStatus } from '../enums/job-status.enum';
 import { InfinityPaginationResponseDto } from '../../utils/dto/infinity-pagination-response.dto';
 import { UsersService } from '../../users/users.service';
+import { User } from '../../users/domain/user';
 
 @Injectable()
 export class JobProducerService {
@@ -170,6 +172,19 @@ export class JobProducerService {
       this.logger.error(`Failed to cancel job ${jobId}:`, error);
       return false;
     }
+  }
+
+  async getLatestCompletedJob(
+    userId: User['id'],
+  ): Promise<LatestCompletedJobDto> {
+    const latestJob =
+      await this.jobRepository.findLatestCompletedByUserId(userId);
+
+    return {
+      latestCompletedAt: latestJob?.completedAt
+        ? latestJob.completedAt.toISOString()
+        : null,
+    };
   }
 
   private calculateProgress(job: Job): number {

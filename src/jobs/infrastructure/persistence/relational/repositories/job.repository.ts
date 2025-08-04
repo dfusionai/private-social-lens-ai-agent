@@ -122,6 +122,23 @@ export class JobRelationalRepository implements JobRepository {
     });
   }
 
+  async findLatestCompletedByUserId(
+    userId: number | string,
+  ): Promise<NullableType<Job>> {
+    const entity = await this.jobRepository.findOne({
+      where: {
+        user: { id: userId as any },
+        status: JobStatus.COMPLETED,
+      },
+      order: {
+        completedAt: 'DESC',
+      },
+      relations: ['user'],
+    });
+
+    return entity ? JobMapper.toDomain(entity) : null;
+  }
+
   async update(id: Job['id'], payload: Partial<Job>): Promise<Job> {
     const entity = await this.jobRepository.findOne({
       where: { id },
