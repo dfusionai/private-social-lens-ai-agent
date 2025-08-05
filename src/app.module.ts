@@ -32,8 +32,11 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
 import { ConversationsModule } from './conversations/conversations.module';
 import { MessagesModule } from './messages/messages.module';
 
+import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-configs.module';
+
 @Module({
   imports: [
+    tokenGatingConfigsModule,
     MessagesModule,
     ConversationsModule,
     ConfigModule.forRoot({
