@@ -35,7 +35,10 @@ import { LatestCompletedJobDto } from './dto/latest-completed-job.dto';
 import { InfinityPaginationResponseDto } from '../utils/dto/infinity-pagination-response.dto';
 
 @ApiTags('Jobs')
-@Controller('jobs')
+@Controller({
+  path: 'jobs',
+  version: '1',
+})
 @UseGuards(AuthGuard('jwt'))
 @ApiBearerAuth()
 export class JobsController {
