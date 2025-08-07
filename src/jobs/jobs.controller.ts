@@ -72,7 +72,7 @@ export class JobsController {
     status: HttpStatus.BAD_REQUEST,
     description: 'Invalid input data or processing options',
   })
-  @HttpCode(HttpStatus.CREATED)
+  @HttpCode(HttpStatus.OK)
   async createJob(
     @GetUser() user: User,
     @Body() createJobDto: CreateJobDto,

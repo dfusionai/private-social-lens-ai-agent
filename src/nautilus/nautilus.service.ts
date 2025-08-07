@@ -258,7 +258,7 @@ Context: ${interpretation}`;
       // Map DTO fields to args array for the API endpoint
       const processRequest = {
         payload: {
-          timeout_secs: timeout_secs || 120,
+          timeout_secs: timeout_secs || this.config.defaultTimeout,
           args: [blobId, onchainFileId, policyId, threshold],
         },
       };
@@ -271,7 +271,7 @@ Context: ${interpretation}`;
             headers: {
               'Content-Type': 'application/json',
             },
-            timeout: (timeout_secs || 120) * 1000,
+            timeout: (timeout_secs || this.config.defaultTimeout) * 1000,
           },
         ),
       );

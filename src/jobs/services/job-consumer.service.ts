@@ -65,7 +65,6 @@ export class JobConsumerService {
             blobId,
             onchainFileId,
             policyId,
-            timeout_secs: 120,
           },
         });
 
