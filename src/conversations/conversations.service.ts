@@ -143,6 +143,30 @@ export class ConversationsService {
     this.logger.log('=== END PROMPT ===\n');
 
     try {
+      if (!conversation.title || conversation.title === 'New Chat') {
+        const namingMessages: ChatMessage[] = this.getNamingMessages(
+          chatDto.content,
+        );
+
+        const namingResponse = await modelService.chat(namingMessages, {
+          model: chatDto.options?.model,
+          temperature: chatDto.options?.temperature,
+          maxTokens: chatDto.options?.maxTokens,
+        });
+
+        // Update conversation with AI-generated title
+        await this.update({
+          id: conversation.id,
+          userId,
+          updateConversationDto: {
+            title: namingResponse.content.trim(),
+          },
+        });
+
+        // Update the conversation object with the new title
+        conversation.title = namingResponse.content.trim();
+      }
+
       const aiResponse = await modelService.chat(messages, {
         model: chatDto.options?.model,
         temperature: chatDto.options?.temperature,
@@ -265,6 +289,30 @@ export class ConversationsService {
     });
     this.logger.log('=== END STREAMING PROMPT ===\n');
 
+    if (!conversation.title || conversation.title === 'New Chat') {
+      const namingMessages: ChatMessage[] = this.getNamingMessages(
+        chatDto.content,
+      );
+
+      const namingResponse = await modelService.chat(namingMessages, {
+        model: chatDto.options?.model,
+        temperature: chatDto.options?.temperature,
+        maxTokens: chatDto.options?.maxTokens,
+      });
+
+      // Update conversation with AI-generated title
+      await this.update({
+        id: conversation.id,
+        userId,
+        updateConversationDto: {
+          title: namingResponse.content.trim(),
+        },
+      });
+
+      // Update the conversation object with the new title
+      conversation.title = namingResponse.content.trim();
+    }
+
     return new Observable<MessageEvent>((observer) => {
       // Send initial event with conversation and user message
       observer.next({
@@ -336,6 +384,22 @@ export class ConversationsService {
         },
       });
     });
+  }
+
+  getNamingMessages(chatContent: string) {
+    const namingMessages: ChatMessage[] = [
+      {
+        role: 'system',
+        content:
+          'You are a helpful assistant that generates short, descriptive titles for conversations. Respond with only the title (max 50 characters) without quotes or additional text.',
+      },
+      {
+        role: 'user',
+        content: `Generate a short, descriptive title for this conversation based on the user's message: "${chatContent}"`,
+      },
+    ];
+
+    return namingMessages;
   }
 
   findAllWithPagination({
