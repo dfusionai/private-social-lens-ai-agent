@@ -15,10 +15,23 @@ import { EntityRelationalHelper } from '../../../../../utils/relational-entity-h
 })
 export class MessageEntity extends EntityRelationalHelper {
   @Column({
-    nullable: false,
+    nullable: true,
     type: String,
   })
-  content: string;
+  content?: string;
+
+  @Column({
+    nullable: true,
+    type: String,
+  })
+  fileHash?: string;
+
+  @Column({
+    nullable: false,
+    type: Boolean,
+    default: false,
+  })
+  isEncrypted: boolean;
 
   @Column({
     nullable: false,

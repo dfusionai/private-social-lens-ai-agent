@@ -34,6 +34,18 @@ export class VectorDbService implements OnModuleInit {
     return this.vectorDbService.addDocument(content, metadata);
   }
 
+  async addDocumentWithEmbedding(
+    content: string,
+    embedding: number[],
+    metadata: Record<string, any> = {},
+  ): Promise<string> {
+    return this.vectorDbService.addDocumentWithEmbedding(
+      content,
+      embedding,
+      metadata,
+    );
+  }
+
   async searchSimilar(
     query: string,
     limit: number = 5,

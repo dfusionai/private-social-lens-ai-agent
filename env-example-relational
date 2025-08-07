@@ -4,6 +4,8 @@ APP_NAME="NestJS API"
 API_PREFIX=api
 APP_FALLBACK_LANGUAGE=en
 APP_HEADER_LANGUAGE=x-custom-lang
+APP_I18N_WATCH_FILES=false
+
 FRONTEND_DOMAIN=http://localhost:3000
 BACKEND_DOMAIN=http://localhost:3000
 
@@ -62,14 +64,19 @@ CLAUDE_API_KEY=your-claude-api-key-here
 # Gemini Configuration
 GEMINI_API_KEY=your-gemini-api-key-here
 
+# Ollama Configuration
+OLLAMA_URL=http://ollama:11434
+OLLAMA_DEFAULT_MODEL=llama3.2
+
 # Vector Database Configuration (RAG)
 VECTOR_DB_PROVIDER=qdrant
-VECTOR_DB_COLLECTION_NAME=chat_documents
-VECTOR_DB_EMBEDDING_MODEL=text-embedding-3-small
-VECTOR_DB_EMBEDDING_DIMENSIONS=1536
+VECTOR_DB_COLLECTION_NAME=Nautilus_messages
+VECTOR_DB_EMBEDDING_MODEL=mxbai-embed-large
+VECTOR_DB_EMBEDDING_DIMENSIONS=1024
 
 # Qdrant Configuration
 QDRANT_URL=http://qdrant:6333
+QDRANT_API_KEY=your-qdrant-api-key-here
 
 # Chroma Configuration (for future use)
 # CHROMA_URL=http://localhost:8000
@@ -86,7 +93,7 @@ EMBEDDING_OPENAI_RETRIES=3
 # Ollama Embeddings Configuration
 EMBEDDING_OLLAMA_URL=http://ollama:11434
 EMBEDDING_OLLAMA_MODEL=mxbai-embed-large
-EMBEDDING_OLLAMA_DIMENSIONS=768
+EMBEDDING_OLLAMA_DIMENSIONS=1024
 EMBEDDING_OLLAMA_TIMEOUT=30000
 EMBEDDING_OLLAMA_RETRIES=3
 
@@ -99,3 +106,8 @@ EMBEDDING_TRANSFORMERS_RETRIES=1
 # Pinecone Configuration (for future use)
 # PINECONE_API_KEY=your-pinecone-api-key
 # PINECONE_ENVIRONMENT=your-pinecone-environment
+
+# Nautilus Configuration
+NAUTILUS_URL=http://13.222.53.243:3000/retrieve_messages_by_blob_ids
+NAUTILUS_DEFAULT_TIMEOUT=120
+NAUTILUS_DEFAULT_THRESHOLD=2

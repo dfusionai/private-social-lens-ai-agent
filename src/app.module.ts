@@ -9,6 +9,7 @@ import mailConfig from './mail/config/mail.config';
 import fileConfig from './files/config/file.config';
 import openaiConfig from './model-api/config/openai.config';
 import claudeConfig from './model-api/config/claude.config';
+import ollamaConfig from './model-api/config/ollama.config';
 import path from 'path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -30,8 +31,6 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
 
 import { ConversationsModule } from './conversations/conversations.module';
 import { MessagesModule } from './messages/messages.module';
-import { DocumentsModule } from './documents/documents.module';
-import { MessageImportModule } from './message-import/message-import.module';
 
 import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-configs.module';
 
@@ -40,8 +39,6 @@ import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-co
     tokenGatingConfigsModule,
     MessagesModule,
     ConversationsModule,
-    DocumentsModule,
-    MessageImportModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [
@@ -52,6 +49,7 @@ import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-co
         fileConfig,
         openaiConfig,
         claudeConfig,
+        ollamaConfig,
       ],
       envFilePath: ['.env'],
     }),
@@ -61,7 +59,10 @@ import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-co
         fallbackLanguage: configService.getOrThrow('app.fallbackLanguage', {
           infer: true,
         }),
-        loaderOptions: { path: path.join(__dirname, '/i18n/'), watch: true },
+        loaderOptions: {
+          path: path.join(__dirname, '/i18n/'),
+          watch: configService.get('app.i18nWatchFiles', { infer: true }),
+        },
       }),
       resolvers: [
         {

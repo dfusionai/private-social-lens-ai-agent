@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { VectorDbService, SearchResult } from '../vector-db/vector-db.service';
+import { NautilusService } from '../nautilus/nautilus.service';
 
 export interface RagContext {
   query: string;
@@ -20,7 +21,10 @@ export interface RagSearchOptions {
 export class RagService {
   private readonly logger = new Logger(RagService.name);
 
-  constructor(private readonly vectorDbService: VectorDbService) {}
+  constructor(
+    private readonly vectorDbService: VectorDbService,
+    private readonly nautilusService: NautilusService,
+  ) {}
 
   async retrieveContext(
     query: string,
@@ -38,12 +42,15 @@ export class RagService {
       let filter: Record<string, any> | undefined;
 
       // Priority: conversationId > userId > no filter
+      // Map interface fields to vector metadata field names
       if (conversationId) {
-        filter = { conversationId };
+        filter = { chat_id: conversationId }; // Use chat_id to match vector metadata
         this.logger.log(`Searching within conversation: ${conversationId}`);
       } else if (userId) {
-        filter = { userId };
-        this.logger.log(`Searching across ALL user data for userId: ${userId}`);
+        filter = { user_id: userId }; // Use user_id to match vector metadata (Telegram ID)
+        this.logger.log(
+          `Searching across ALL user data for Telegram ID: ${userId}`,
+        );
       } else {
         this.logger.log('Searching without filters (global search)');
       }
@@ -94,11 +101,12 @@ export class RagService {
         `Pre-filter results: ${searchResults.length}, Post-filter: ${filteredResults.length}`,
       );
 
-      const contextText = this.buildContextText(filteredResults);
+      const decryptedResults = await this.decryptSearchResults(filteredResults);
+      const contextText = this.buildContextText(decryptedResults);
 
       return {
         query,
-        retrievedDocuments: filteredResults,
+        retrievedDocuments: decryptedResults,
         contextText,
       };
     } catch (error) {
@@ -107,83 +115,167 @@ export class RagService {
     }
   }
 
+  private async decryptSearchResults(
+    results: SearchResult[],
+  ): Promise<SearchResult[]> {
+    const decryptedResults: SearchResult[] = [];
+
+    if (results.length === 0) {
+      return decryptedResults;
+    }
+
+    // Group results by walrusBlobId for batching (all messages are encrypted)
+    const blobFileMap = new Map<
+      string,
+      {
+        walrusBlobId: string;
+        onChainFileObjId: string;
+        policyObjectId: string;
+        messageIndices: number[];
+        results: SearchResult[];
+      }
+    >();
+    const invalidResults: SearchResult[] = [];
+
+    for (const result of results) {
+      const {
+        refined_file_blob_id,
+        refined_file_on_chain_id,
+        policy_object_id,
+        message_index,
+      } = result.metadata;
+
+      if (
+        refined_file_blob_id &&
+        refined_file_on_chain_id &&
+        policy_object_id &&
+        message_index !== undefined
+      ) {
+        // Group by walrusBlobId to batch requests efficiently
+        if (!blobFileMap.has(refined_file_blob_id)) {
+          blobFileMap.set(refined_file_blob_id, {
+            walrusBlobId: refined_file_blob_id,
+            onChainFileObjId: refined_file_on_chain_id,
+            policyObjectId: policy_object_id,
+            messageIndices: [],
+            results: [],
+          });
+        }
+
+        const blobData = blobFileMap.get(refined_file_blob_id)!;
+        blobData.messageIndices.push(message_index);
+        blobData.results.push(result);
+      } else {
+        // Results missing required Nautilus metadata
+        this.logger.warn(
+          `Missing Nautilus metadata for result ${result.id}, skipping. Required: refined_file_blob_id, refined_file_on_chain_id, policy_object_id, message_index`,
+        );
+        invalidResults.push(result);
+      }
+    }
+
+    // Process all blobFilePairs in a single batched Nautilus request
+    if (blobFileMap.size > 0) {
+      try {
+        const blobFilePairs = Array.from(blobFileMap.values()).map(
+          (blobData) => ({
+            walrusBlobId: blobData.walrusBlobId,
+            onChainFileObjId: blobData.onChainFileObjId,
+            policyObjectId: blobData.policyObjectId,
+            messageIndices: blobData.messageIndices,
+          }),
+        );
+
+        const totalMessageIndices = blobFilePairs.reduce(
+          (sum, pair) => sum + pair.messageIndices.length,
+          0,
+        );
+
+        this.logger.debug(
+          `Batching ${blobFilePairs.length} blob files with ${totalMessageIndices} total message indices`,
+        );
+
+        const rawMessages =
+          await this.nautilusService.retrieveMultipleRawMessages(blobFilePairs);
+
+        // Map results back to search results by walrusBlobId + messageIndex
+        const messageMap = new Map(
+          rawMessages.map((msg) => [
+            `${msg.metadata?.walrus_blob_id}:${msg.metadata?.message_index}`,
+            msg.content,
+          ]),
+        );
+
+        // Process all results from all blobs
+        for (const [, blobData] of blobFileMap) {
+          for (const result of blobData.results) {
+            const lookupKey = `${result.metadata.refined_file_blob_id}:${result.metadata.message_index}`;
+            const content = messageMap.get(lookupKey);
+            if (content) {
+              decryptedResults.push({
+                ...result,
+                content,
+              });
+            } else {
+              this.logger.warn(
+                `No content found for blob ${result.metadata.refined_file_blob_id} with message index ${result.metadata.message_index}, skipping`,
+              );
+            }
+          }
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to batch decrypt messages for ${blobFileMap.size} blobs:`,
+          error,
+        );
+
+        // Skip all results as we cannot decrypt them
+        for (const [, blobData] of blobFileMap) {
+          for (const result of blobData.results) {
+            this.logger.warn(
+              `Skipping result ${result.id} due to decryption failure`,
+            );
+          }
+        }
+      }
+    }
+
+    return decryptedResults;
+  }
+
   private buildContextText(documents: SearchResult[]): string {
     if (documents.length === 0) {
-      return `### INSTRUCTIONS:
-You are Dfusion AI, my personal Private Lens AI. Your name is "Dfusion AI" and you should identify yourself by this name when asked. You use retrieved context from my chat history in Qdrant to respond as I would, matching my communication style and honoring past commitments or preferences found in the context.
+      return `You are an information retrieval assistant that summarizes content from Telegram chat history.
 
-### AI IDENTITY:
-- Your name is: Dfusion AI
-- When asked about your name, respond that you are Dfusion AI
-- You are a personal Private Lens AI
+CHAT HISTORY:
+No relevant data found.
 
-### CONTEXT RELEVANCE:
-- Context score threshold: Use context with similarity > 0.7
-- If multiple contexts conflict, prioritize the most recent (highest timestamp)
-- If context seems irrelevant or fragmented, rely on general reasoning
-
-### RETRIEVED CONTEXT:
-No relevant context found.
-
-### RESPONSE GUIDELINES:
-1. Style Matching: Mirror my typical tone, formality level, and response length patterns from context
-2. Consistency: Respect prior agreements, opinions, and relationship dynamics shown in context
-3. Context Quality: 
-   - Score >0.8: High confidence, use context heavily
-   - Score 0.7-0.8: Moderate confidence, use context but verify if unsure
-   - Score <0.7: Low confidence, mention limited context
-4. Uncertainty Handling: If context is unclear or insufficient, say so and ask for clarification
-5. Privacy: Don't reference sensitive details from context unless directly relevant
-6. Identity: Always remember you are Dfusion AI when asked about your name or identity
-
-### OUTPUT FORMAT:
-Provide only the response message - no explanations, metadata, or system notes.
-
-### RESPONSE:`;
+INSTRUCTIONS:
+- Only summarize and present information that exists in chat history
+- If no relevant information found, respond: "I couldn’t find any chat history related to your question."
+- Do not promise actions or services you cannot perform
+- Do not mention sending emails, notifications, or any external actions
+- Do not use emojis or icons
+- Focus only on retrieving and presenting existing information`;
     }
 
     const contextParts = documents.map((doc) => {
-      const timestamp =
-        doc.metadata.originalTimestamp || doc.metadata.timestamp || 'Unknown';
-      const formattedTimestamp =
-        timestamp !== 'Unknown' ? new Date(timestamp).toISOString() : 'Unknown';
-
-      return `Similarity Score: ${doc.score.toFixed(3)}
-Timestamp: ${formattedTimestamp}
-Context: ${doc.content}`;
+      return `${doc.content}`;
     });
 
-    return `### INSTRUCTIONS:
-You are Dfusion AI, my personal Private Lens AI. Your name is "Dfusion AI" and you should identify yourself by this name when asked. You use retrieved context from my chat history in Qdrant to respond as I would, matching my communication style and honoring past commitments or preferences found in the context.
+    return `You are an information retrieval assistant that summarizes content from Telegram chat history.
 
-### AI IDENTITY:
-- Your name is: Dfusion AI
-- When asked about your name, respond that you are Dfusion AI
-- You are a personal Private Lens AI
-
-### CONTEXT RELEVANCE:
-- Context score threshold: Use context with similarity > 0.7
-- If multiple contexts conflict, prioritize the most recent (highest timestamp)
-- If context seems irrelevant or fragmented, rely on general reasoning
-
-### RETRIEVED CONTEXT:
+CHAT HISTORY:
 ${contextParts.join('\n\n')}
 
-### RESPONSE GUIDELINES:
-1. Style Matching: Mirror my typical tone, formality level, and response length patterns from context
-2. Consistency: Respect prior agreements, opinions, and relationship dynamics shown in context
-3. Context Quality: 
-   - Score >0.8: High confidence, use context heavily
-   - Score 0.7-0.8: Moderate confidence, use context but verify if unsure
-   - Score <0.7: Low confidence, mention limited context
-4. Uncertainty Handling: If context is unclear or insufficient, say so and ask for clarification
-5. Privacy: Don't reference sensitive details from context unless directly relevant
-6. Identity: Always remember you are Dfusion AI when asked about your name or identity
-
-### OUTPUT FORMAT:
-Provide only the response message - no explanations, metadata, or system notes.
-
-### RESPONSE:`;
+INSTRUCTIONS:
+- Only summarize and present information that exists in the chat history above
+- Give direct, concise answers without explanations or analysis
+- Do not promise actions or services you cannot perform
+- Do not mention sending emails, notifications, or any external actions
+- Do not ask questions or suggest follow-up actions
+- Do not use emojis or icons
+- Focus only on retrieving and presenting existing information`;
   }
 
   async enhancePromptWithContext(
@@ -235,6 +327,8 @@ Message: ${userMessage}
       userId: string;
       role: 'user' | 'assistant';
       source?: string;
+      fileHash?: string;
+      isEncrypted?: boolean;
     },
   ): Promise<string> {
     try {
@@ -242,6 +336,8 @@ Message: ${userMessage}
         ...metadata,
         source: metadata.source || `${metadata.role}_message`,
         timestamp: new Date(),
+        fileHash: metadata.fileHash,
+        isEncrypted: metadata.isEncrypted || false,
       };
 
       const documentId = await this.vectorDbService.addDocument(

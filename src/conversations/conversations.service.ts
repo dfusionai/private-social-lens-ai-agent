@@ -97,12 +97,21 @@ export class ConversationsService {
     });
 
     // Add user message to RAG context
-    await this.ragService.addMessageToContext(chatDto.content, {
-      conversationId: conversation.id,
-      messageId: userMessage.id,
-      userId: String(userId),
-      role: 'user',
-    });
+    // await this.ragService.addMessageToContext(chatDto.content, {
+    //   conversationId: conversation.id,
+    //   messageId: userMessage.id,
+    //   userId: String(userId),
+    //   role: 'user',
+    // });
+
+    // Get user's social ID (Telegram ID) for RAG context search
+    const user = await this.userService.findById(userId);
+    if (!user?.socialId) {
+      throw new ForbiddenException(
+        'User must have a Telegram social ID to use chat',
+      );
+    }
+    const socialId = user.socialId;
 
     // Get conversation history and enhance with RAG context
     const messages = await this.getConversationHistory(conversation.id);
@@ -111,7 +120,7 @@ export class ConversationsService {
     const enhancedQuery = await this.ragService.enhancePromptWithContext(
       chatDto.content,
       {
-        userId: String(userId), // Search across ALL user data
+        userId: socialId, // Use Telegram social ID for RAG search
         // conversationId: conversation.id, // Remove conversation filter
         limit: 10, // Increase limit for broader search
         threshold: 0.05, // Much lower threshold to include Emily-John conversation
@@ -123,7 +132,7 @@ export class ConversationsService {
       messages[messages.length - 1].content = enhancedQuery;
     }
 
-    const provider = chatDto.options?.provider || ModelProvider.CLAUDE;
+    const provider = chatDto.options?.provider || ModelProvider.OLLAMA;
     const modelService = this.modelApiFactory.getModelService(provider);
 
     // Log the complete prompt sent to AI model
@@ -183,13 +192,13 @@ export class ConversationsService {
       });
 
       // Add AI message to RAG context
-      await this.ragService.addMessageToContext(aiResponse.content, {
-        conversationId: conversation.id,
-        messageId: aiMessage.id,
-        userId: String(userId),
-        role: 'assistant',
-        source: 'chat_assistant_response',
-      });
+      // await this.ragService.addMessageToContext(aiResponse.content, {
+      //   conversationId: conversation.id,
+      //   messageId: aiMessage.id,
+      //   userId: String(userId),
+      //   role: 'assistant',
+      //   source: 'chat_assistant_response',
+      // });
 
       return {
         conversation,
@@ -241,12 +250,21 @@ export class ConversationsService {
     });
 
     // Add user message to RAG context
-    await this.ragService.addMessageToContext(chatDto.content, {
-      conversationId: conversation.id,
-      messageId: userMessage.id,
-      userId: String(userId),
-      role: 'user',
-    });
+    // await this.ragService.addMessageToContext(chatDto.content, {
+    //   conversationId: conversation.id,
+    //   messageId: userMessage.id,
+    //   userId: String(userId),
+    //   role: 'user',
+    // });
+
+    // Get user's social ID (Telegram ID) for RAG context search
+    const user = await this.userService.findById(userId);
+    if (!user?.socialId) {
+      throw new ForbiddenException(
+        'User must have a Telegram social ID to use chat',
+      );
+    }
+    const socialId = user.socialId;
 
     // Get conversation history and enhance with RAG context
     const messages = await this.getConversationHistory(conversation.id);
@@ -255,7 +273,7 @@ export class ConversationsService {
     const enhancedQuery = await this.ragService.enhancePromptWithContext(
       chatDto.content,
       {
-        userId: String(userId), // Search across ALL user data
+        userId: socialId, // Use Telegram social ID for RAG search
         // conversationId: conversation.id, // Remove conversation filter
         limit: 10, // Increase limit for broader search
         threshold: 0.05, // Much lower threshold to include Emily-John conversation
@@ -268,7 +286,7 @@ export class ConversationsService {
     }
 
     // Get the model service
-    const provider = chatDto.options?.provider || ModelProvider.GEMINI;
+    const provider = chatDto.options?.provider || ModelProvider.OLLAMA;
     const modelService = this.modelApiFactory.getModelService(provider);
 
     // Log the complete prompt sent to AI model (streaming)
@@ -356,14 +374,14 @@ export class ConversationsService {
                   id: conversation.id,
                 },
               })
-              .then(async (aiMessage) => {
-                // Add AI message to RAG context
-                await this.ragService.addMessageToContext(fullResponse, {
-                  conversationId: conversation.id,
-                  messageId: aiMessage.id,
-                  userId: String(userId),
-                  role: 'assistant',
-                });
+              .then((aiMessage) => {
+                // // Add AI message to RAG context
+                // await this.ragService.addMessageToContext(fullResponse, {
+                //   conversationId: conversation.id,
+                //   messageId: aiMessage.id,
+                //   userId: String(userId),
+                //   role: 'assistant',
+                // });
 
                 observer.next({
                   data: JSON.stringify({
@@ -403,11 +421,14 @@ export class ConversationsService {
   }
 
   findAllWithPagination({
+    userId,
     paginationOptions,
   }: {
+    userId: User['id'];
     paginationOptions: IPaginationOptions;
   }) {
     return this.conversationRepository.findAllWithPagination({
+      userId,
       paginationOptions: {
         page: paginationOptions.page,
         limit: paginationOptions.limit,
@@ -416,6 +437,21 @@ export class ConversationsService {
   }
 
   findById(id: Conversation['id']) {
+    return this.conversationRepository.findById(id);
+  }
+
+  async findByIdAndUserId({
+    id,
+    userId,
+  }: {
+    id: Conversation['id'];
+    userId: User['id'];
+  }) {
+    await this.validateConversationOwnership({
+      conversationId: id,
+      userId,
+    });
+    // For backward compatibility when no userId is provided
     return this.conversationRepository.findById(id);
   }
 
