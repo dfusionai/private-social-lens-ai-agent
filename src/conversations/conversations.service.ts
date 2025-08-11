@@ -168,12 +168,12 @@ export class ConversationsService {
           id: conversation.id,
           userId,
           updateConversationDto: {
-            title: namingResponse.content.trim(),
+            title: this.cleanTitle(namingResponse.content),
           },
         });
 
         // Update the conversation object with the new title
-        conversation.title = namingResponse.content.trim();
+        conversation.title = this.cleanTitle(namingResponse.content);
       }
 
       const aiResponse = await modelService.chat(messages, {
@@ -323,12 +323,12 @@ export class ConversationsService {
         id: conversation.id,
         userId,
         updateConversationDto: {
-          title: namingResponse.content.trim(),
+          title: this.cleanTitle(namingResponse.content),
         },
       });
 
       // Update the conversation object with the new title
-      conversation.title = namingResponse.content.trim();
+      conversation.title = this.cleanTitle(namingResponse.content);
     }
 
     return new Observable<MessageEvent>((observer) => {
@@ -418,6 +418,13 @@ export class ConversationsService {
     ];
 
     return namingMessages;
+  }
+
+  private cleanTitle(title: string): string {
+    return title
+      .trim()
+      .replace(/^["']|["']$/g, '') // Remove quotes from start and end
+      .trim(); // Trim again after quote removal
   }
 
   findAllWithPagination({
