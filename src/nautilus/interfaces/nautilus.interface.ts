@@ -69,6 +69,17 @@ export interface ParsedNautilusResult {
   };
 }
 
+export interface ProcessDataRequestPayload {
+  blobId: string;
+  onchainFileId: string;
+  policyId: string;
+  timeout_secs?: number;
+}
+
+export interface ProcessDataRequest {
+  payload: ProcessDataRequestPayload;
+}
+
 export interface NautilusConfig {
   url: string;
   defaultTimeout: number;

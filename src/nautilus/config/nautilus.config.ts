@@ -23,7 +23,7 @@ export default registerAs<NautilusConfig>('nautilus', () => {
 
   return {
     url: process.env.NAUTILUS_URL || 'http://localhost:3001',
-    defaultTimeout: parseInt(process.env.NAUTILUS_DEFAULT_TIMEOUT ?? '120', 10),
+    defaultTimeout: parseInt(process.env.NAUTILUS_DEFAULT_TIMEOUT ?? '300', 10),
     defaultThreshold: process.env.NAUTILUS_DEFAULT_THRESHOLD || '2',
   };
 });

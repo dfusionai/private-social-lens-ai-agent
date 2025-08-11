@@ -8,6 +8,7 @@ import { ClaudeConfig } from '../model-api/config/claude-config.type';
 import { GeminiConfig } from '../model-api/config/gemini-config.type';
 import { OllamaConfig } from '../model-api/config/ollama-config.type';
 import { EmbeddingConfig } from '../embeddings/config/embedding-config.type';
+import { JobConfig } from '../jobs/config/job-config.type';
 
 export type AllConfigType = {
   app: AppConfig;
@@ -20,4 +21,5 @@ export type AllConfigType = {
   gemini: GeminiConfig;
   ollama: OllamaConfig;
   embedding: EmbeddingConfig;
+  job: JobConfig;
 };
