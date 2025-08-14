@@ -57,7 +57,7 @@ export default registerAs<JobConfig>('job', () => {
       : 60000,
     teeProcessTimeout: process.env.TEE_PROCESS_TIMEOUT
       ? parseInt(process.env.TEE_PROCESS_TIMEOUT, 10)
-      : 300000,
+      : 480000,
     workerInstanceId:
       process.env.WORKER_INSTANCE_ID ||
       `worker-${process.env.HOSTNAME || 'local'}-${Date.now()}`,

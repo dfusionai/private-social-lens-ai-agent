@@ -33,20 +33,20 @@ export const DEFAULT_EMBEDDING_CONFIGS: Record<
   [EmbeddingProvider.OPENAI]: {
     model: 'text-embedding-3-small',
     dimensions: 1536,
-    timeout: 30000,
+    timeout: 180000,
     retries: 3,
   },
   [EmbeddingProvider.OLLAMA]: {
     model: 'mxbai-embed-large',
     dimensions: 1024,
     url: 'http://localhost:11434',
-    timeout: 30000,
+    timeout: 180000,
     retries: 3,
   },
   [EmbeddingProvider.TRANSFORMERS]: {
     model: 'Xenova/all-MiniLM-L6-v2',
     dimensions: 384,
-    timeout: 60000,
+    timeout: 180000,
     retries: 1,
   },
 };
