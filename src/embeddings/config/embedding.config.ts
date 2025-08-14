@@ -12,14 +12,14 @@ export default registerAs(
       apiKey: process.env.OPENAI_API_KEY || '',
       model: process.env.EMBEDDING_OPENAI_MODEL || 'text-embedding-3-small',
       dimensions: parseInt(process.env.EMBEDDING_OPENAI_DIMENSIONS || '1536'),
-      timeout: parseInt(process.env.EMBEDDING_OPENAI_TIMEOUT || '30000'),
+      timeout: parseInt(process.env.EMBEDDING_OPENAI_TIMEOUT || '180000'),
       retries: parseInt(process.env.EMBEDDING_OPENAI_RETRIES || '3'),
     },
     ollama: {
       url: process.env.EMBEDDING_OLLAMA_URL || 'http://localhost:11434',
       model: process.env.EMBEDDING_OLLAMA_MODEL || 'nomic-embed-text',
       dimensions: parseInt(process.env.EMBEDDING_OLLAMA_DIMENSIONS || '768'),
-      timeout: parseInt(process.env.EMBEDDING_OLLAMA_TIMEOUT || '30000'),
+      timeout: parseInt(process.env.EMBEDDING_OLLAMA_TIMEOUT || '180000'),
       retries: parseInt(process.env.EMBEDDING_OLLAMA_RETRIES || '3'),
     },
     transformers: {
@@ -28,7 +28,7 @@ export default registerAs(
       dimensions: parseInt(
         process.env.EMBEDDING_TRANSFORMERS_DIMENSIONS || '384',
       ),
-      timeout: parseInt(process.env.EMBEDDING_TRANSFORMERS_TIMEOUT || '60000'),
+      timeout: parseInt(process.env.EMBEDDING_TRANSFORMERS_TIMEOUT || '180000'),
       retries: parseInt(process.env.EMBEDDING_TRANSFORMERS_RETRIES || '1'),
     },
   }),
