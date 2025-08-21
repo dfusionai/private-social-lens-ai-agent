@@ -9,8 +9,10 @@ export abstract class ConversationRepository {
   ): Promise<Conversation>;
 
   abstract findAllWithPagination({
+    userId,
     paginationOptions,
   }: {
+    userId?: string | number;
     paginationOptions: IPaginationOptions;
   }): Promise<Conversation[]>;
 

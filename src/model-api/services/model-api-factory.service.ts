@@ -3,6 +3,7 @@ import { ModelApiService } from '../interfaces/model-api.interface';
 import { OpenAiService } from './openai.service';
 import { ClaudeService } from './claude.service';
 import { GeminiService } from './gemini.service';
+import { OllamaService } from './ollama.service';
 import { ModelProvider } from '../enums/model-provider.enum';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class ModelApiFactoryService {
     private readonly openAiService: OpenAiService,
     private readonly claudeService: ClaudeService,
     private readonly geminiService: GeminiService,
+    private readonly ollamaService: OllamaService,
   ) {}
 
   getModelService(provider: ModelProvider): ModelApiService {
@@ -21,6 +23,8 @@ export class ModelApiFactoryService {
         return this.claudeService;
       case ModelProvider.GEMINI:
         return this.geminiService;
+      case ModelProvider.OLLAMA:
+        return this.ollamaService;
       default:
         throw new BadRequestException(
           `Unsupported model provider: ${provider}`,

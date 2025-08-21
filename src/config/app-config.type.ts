@@ -8,4 +8,5 @@ export type AppConfig = {
   apiPrefix: string;
   fallbackLanguage: string;
   headerLanguage: string;
+  i18nWatchFiles: boolean;
 };

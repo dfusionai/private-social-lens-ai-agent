@@ -30,6 +30,8 @@ export interface VectorDbConfig {
   collectionName?: string;
   embeddingModel?: string;
   embeddingDimensions?: number;
+  apiKey?: string | null;
+  port?: number | null;
   [key: string]: any;
 }
 
@@ -46,6 +48,12 @@ export abstract class VectorDbService {
 
   abstract addDocument(
     content: string,
+    metadata?: Record<string, any>,
+  ): Promise<string>;
+
+  abstract addDocumentWithEmbedding(
+    content: string,
+    embedding: number[],
     metadata?: Record<string, any>,
   ): Promise<string>;
 

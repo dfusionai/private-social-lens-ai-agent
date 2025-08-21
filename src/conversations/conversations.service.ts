@@ -97,12 +97,21 @@ export class ConversationsService {
     });
 
     // Add user message to RAG context
-    await this.ragService.addMessageToContext(chatDto.content, {
-      conversationId: conversation.id,
-      messageId: userMessage.id,
-      userId: String(userId),
-      role: 'user',
-    });
+    // await this.ragService.addMessageToContext(chatDto.content, {
+    //   conversationId: conversation.id,
+    //   messageId: userMessage.id,
+    //   userId: String(userId),
+    //   role: 'user',
+    // });
+
+    // Get user's social ID (Telegram ID) for RAG context search
+    const user = await this.userService.findById(userId);
+    if (!user?.socialId) {
+      throw new ForbiddenException(
+        'User must have a Telegram social ID to use chat',
+      );
+    }
+    const socialId = user.socialId;
 
     // Get conversation history and enhance with RAG context
     const messages = await this.getConversationHistory(conversation.id);
@@ -111,7 +120,7 @@ export class ConversationsService {
     const enhancedQuery = await this.ragService.enhancePromptWithContext(
       chatDto.content,
       {
-        userId: String(userId), // Search across ALL user data
+        userId: socialId, // Use Telegram social ID for RAG search
         // conversationId: conversation.id, // Remove conversation filter
         limit: 10, // Increase limit for broader search
         threshold: 0.05, // Much lower threshold to include Emily-John conversation
@@ -123,7 +132,7 @@ export class ConversationsService {
       messages[messages.length - 1].content = enhancedQuery;
     }
 
-    const provider = chatDto.options?.provider || ModelProvider.CLAUDE;
+    const provider = chatDto.options?.provider || ModelProvider.OLLAMA;
     const modelService = this.modelApiFactory.getModelService(provider);
 
     // Log the complete prompt sent to AI model
@@ -143,6 +152,30 @@ export class ConversationsService {
     this.logger.log('=== END PROMPT ===\n');
 
     try {
+      if (!conversation.title || conversation.title === 'New Chat') {
+        const namingMessages: ChatMessage[] = this.getNamingMessages(
+          chatDto.content,
+        );
+
+        const namingResponse = await modelService.chat(namingMessages, {
+          model: chatDto.options?.model,
+          temperature: chatDto.options?.temperature,
+          maxTokens: chatDto.options?.maxTokens,
+        });
+
+        // Update conversation with AI-generated title
+        await this.update({
+          id: conversation.id,
+          userId,
+          updateConversationDto: {
+            title: this.cleanTitle(namingResponse.content),
+          },
+        });
+
+        // Update the conversation object with the new title
+        conversation.title = this.cleanTitle(namingResponse.content);
+      }
+
       const aiResponse = await modelService.chat(messages, {
         model: chatDto.options?.model,
         temperature: chatDto.options?.temperature,
@@ -159,13 +192,13 @@ export class ConversationsService {
       });
 
       // Add AI message to RAG context
-      await this.ragService.addMessageToContext(aiResponse.content, {
-        conversationId: conversation.id,
-        messageId: aiMessage.id,
-        userId: String(userId),
-        role: 'assistant',
-        source: 'chat_assistant_response',
-      });
+      // await this.ragService.addMessageToContext(aiResponse.content, {
+      //   conversationId: conversation.id,
+      //   messageId: aiMessage.id,
+      //   userId: String(userId),
+      //   role: 'assistant',
+      //   source: 'chat_assistant_response',
+      // });
 
       return {
         conversation,
@@ -217,12 +250,21 @@ export class ConversationsService {
     });
 
     // Add user message to RAG context
-    await this.ragService.addMessageToContext(chatDto.content, {
-      conversationId: conversation.id,
-      messageId: userMessage.id,
-      userId: String(userId),
-      role: 'user',
-    });
+    // await this.ragService.addMessageToContext(chatDto.content, {
+    //   conversationId: conversation.id,
+    //   messageId: userMessage.id,
+    //   userId: String(userId),
+    //   role: 'user',
+    // });
+
+    // Get user's social ID (Telegram ID) for RAG context search
+    const user = await this.userService.findById(userId);
+    if (!user?.socialId) {
+      throw new ForbiddenException(
+        'User must have a Telegram social ID to use chat',
+      );
+    }
+    const socialId = user.socialId;
 
     // Get conversation history and enhance with RAG context
     const messages = await this.getConversationHistory(conversation.id);
@@ -231,7 +273,7 @@ export class ConversationsService {
     const enhancedQuery = await this.ragService.enhancePromptWithContext(
       chatDto.content,
       {
-        userId: String(userId), // Search across ALL user data
+        userId: socialId, // Use Telegram social ID for RAG search
         // conversationId: conversation.id, // Remove conversation filter
         limit: 10, // Increase limit for broader search
         threshold: 0.05, // Much lower threshold to include Emily-John conversation
@@ -244,7 +286,7 @@ export class ConversationsService {
     }
 
     // Get the model service
-    const provider = chatDto.options?.provider || ModelProvider.GEMINI;
+    const provider = chatDto.options?.provider || ModelProvider.OLLAMA;
     const modelService = this.modelApiFactory.getModelService(provider);
 
     // Log the complete prompt sent to AI model (streaming)
@@ -264,6 +306,30 @@ export class ConversationsService {
       );
     });
     this.logger.log('=== END STREAMING PROMPT ===\n');
+
+    if (!conversation.title || conversation.title === 'New Chat') {
+      const namingMessages: ChatMessage[] = this.getNamingMessages(
+        chatDto.content,
+      );
+
+      const namingResponse = await modelService.chat(namingMessages, {
+        model: chatDto.options?.model,
+        temperature: chatDto.options?.temperature,
+        maxTokens: chatDto.options?.maxTokens,
+      });
+
+      // Update conversation with AI-generated title
+      await this.update({
+        id: conversation.id,
+        userId,
+        updateConversationDto: {
+          title: this.cleanTitle(namingResponse.content),
+        },
+      });
+
+      // Update the conversation object with the new title
+      conversation.title = this.cleanTitle(namingResponse.content);
+    }
 
     return new Observable<MessageEvent>((observer) => {
       // Send initial event with conversation and user message
@@ -308,14 +374,14 @@ export class ConversationsService {
                   id: conversation.id,
                 },
               })
-              .then(async (aiMessage) => {
-                // Add AI message to RAG context
-                await this.ragService.addMessageToContext(fullResponse, {
-                  conversationId: conversation.id,
-                  messageId: aiMessage.id,
-                  userId: String(userId),
-                  role: 'assistant',
-                });
+              .then((aiMessage) => {
+                // // Add AI message to RAG context
+                // await this.ragService.addMessageToContext(fullResponse, {
+                //   conversationId: conversation.id,
+                //   messageId: aiMessage.id,
+                //   userId: String(userId),
+                //   role: 'assistant',
+                // });
 
                 observer.next({
                   data: JSON.stringify({
@@ -338,12 +404,38 @@ export class ConversationsService {
     });
   }
 
+  getNamingMessages(chatContent: string) {
+    const namingMessages: ChatMessage[] = [
+      {
+        role: 'system',
+        content:
+          'You are a helpful assistant that generates short, descriptive titles for conversations. Respond with only the title (max 50 characters) without quotes or additional text.',
+      },
+      {
+        role: 'user',
+        content: `Generate a short, descriptive title for this conversation based on the user's message: "${chatContent}"`,
+      },
+    ];
+
+    return namingMessages;
+  }
+
+  private cleanTitle(title: string): string {
+    return title
+      .trim()
+      .replace(/^["']|["']$/g, '') // Remove quotes from start and end
+      .trim(); // Trim again after quote removal
+  }
+
   findAllWithPagination({
+    userId,
     paginationOptions,
   }: {
+    userId: User['id'];
     paginationOptions: IPaginationOptions;
   }) {
     return this.conversationRepository.findAllWithPagination({
+      userId,
       paginationOptions: {
         page: paginationOptions.page,
         limit: paginationOptions.limit,
@@ -352,6 +444,21 @@ export class ConversationsService {
   }
 
   findById(id: Conversation['id']) {
+    return this.conversationRepository.findById(id);
+  }
+
+  async findByIdAndUserId({
+    id,
+    userId,
+  }: {
+    id: Conversation['id'];
+    userId: User['id'];
+  }) {
+    await this.validateConversationOwnership({
+      conversationId: id,
+      userId,
+    });
+    // For backward compatibility when no userId is provided
     return this.conversationRepository.findById(id);
   }
 

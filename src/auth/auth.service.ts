@@ -598,9 +598,9 @@ export class AuthService {
       // }
 
       const me = {
-        id: 'testId',
-        firstName: 'testFirstName',
-        lastName: 'testLastName',
+        id: loginDto.telegramId,
+        firstName: null,
+        lastName: null,
       };
 
       // Find or create user
