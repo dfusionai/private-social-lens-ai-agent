@@ -1,0 +1,57 @@
+# name: Deploy to Azure Container Apps
+
+# on:
+#   push:
+#     branches: [ "main" ]
+
+# jobs:
+#   build-and-deploy:
+#     runs-on: ubuntu-latest
+
+#     env:
+#       ACR: socialtruthcontainerregistry.azurecr.io
+#       IMAGE_NAME: private-social-lens-ai-agent
+
+#     steps:
+#       - name: Check out repo
+#         uses: actions/checkout@v3
+#         with:
+#           fetch-depth: 0  # Needed to get full commit history for hash
+
+#       # Get commit hash for tagging
+#       - name: Get commit hash
+#         id: commit
+#         run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+#       # Log in to Azure
+#       - name: Azure Login
+#         uses: azure/login@v2
+#         with:
+#           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+#       # Log in to ACR with Docker (correct method)
+#       - name: Log in to Azure Container Registry
+#         run: |
+#           docker login ${{ env.ACR }} -u ${{ secrets.ACR_USERNAME }} -p ${{ secrets.ACR_PASSWORD }}
+
+#       # Build Docker image with commit hash tag
+#       - name: Build and tag Docker image
+#         run: |
+#           docker build \
+#             -t ${{ env.ACR }}/${{ env.IMAGE_NAME }}:${{ steps.commit.outputs.SHORT_SHA }} \
+#             -t ${{ env.ACR }}/${{ env.IMAGE_NAME }}:latest \
+#             .
+
+#       # Push both tags to Azure Container Registry
+#       - name: Push Docker Images to ACR
+#         run: |
+#           docker push ${{ env.ACR }}/${{ env.IMAGE_NAME }}:${{ steps.commit.outputs.SHORT_SHA }}
+#           docker push ${{ env.ACR }}/${{ env.IMAGE_NAME }}:latest
+
+#       # Deploy specific commit hash version to Azure Container Apps
+#       - name: Deploy to Azure Container Apps
+#         run: |
+#           az containerapp update \
+#             --name private-social-lens-ai-agent \
+#             --resource-group SocialTruth \
+#             --image ${{ env.ACR }}/${{ env.IMAGE_NAME }}:${{ steps.commit.outputs.SHORT_SHA }}
