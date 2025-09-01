@@ -76,6 +76,12 @@ export class AzureOpenAiService extends ModelApiService {
         })
         .then(async (stream) => {
           for await (const chunk of stream) {
+            if (!chunk.choices || chunk.choices.length === 0) {
+              // Skip Azure OpenAI’s content filtering system safety check chunk.
+              // Every request first comes back with a prompt_filter_results event, before the actual tokens start streaming
+              continue;
+            }
+
             const content = chunk.choices[0]?.delta?.content || '';
             const done = chunk.choices[0]?.finish_reason !== null;
 
