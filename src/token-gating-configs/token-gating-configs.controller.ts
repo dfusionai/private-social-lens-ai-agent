@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
-// import { AuthGuard } from '@nestjs/passport';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import {
-  // ApiBearerAuth,
+  ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiTags,
@@ -11,8 +11,6 @@ import { CreateTokenGatingConfigDto } from './dto/create-token-gating-config.dto
 import { tokenGatingConfigsService } from './token-gating-configs.service';
 
 @ApiTags('Token Gating Configs')
-// @ApiBearerAuth()
-// @UseGuards(AuthGuard('jwt'))
 @Controller({
   path: 'token-gating-configs',
   version: '1',
@@ -26,6 +24,8 @@ export class tokenGatingConfigsController {
   @ApiCreatedResponse({
     type: tokenGatingConfig,
   })
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
   create(@Body() createTokenGatingConfigDto: CreateTokenGatingConfigDto) {
     return this.tokenGatingConfigsService.create(createTokenGatingConfigDto);
   }
