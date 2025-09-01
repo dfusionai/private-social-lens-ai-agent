@@ -7,6 +7,7 @@ import authConfig from './auth/config/auth.config';
 import appConfig from './config/app.config';
 import mailConfig from './mail/config/mail.config';
 import fileConfig from './files/config/file.config';
+import azureOpenaiConfig from './model-api/config/azure-openai.config';
 import openaiConfig from './model-api/config/openai.config';
 import claudeConfig from './model-api/config/claude.config';
 import ollamaConfig from './model-api/config/ollama.config';
@@ -50,6 +51,7 @@ import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-co
         appConfig,
         mailConfig,
         fileConfig,
+        azureOpenaiConfig,
         openaiConfig,
         claudeConfig,
         ollamaConfig,
