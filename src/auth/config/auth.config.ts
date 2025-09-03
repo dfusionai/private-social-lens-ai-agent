@@ -64,5 +64,6 @@ export default registerAs<AuthConfig>('auth', () => {
     telegramDcId: process.env.TELEGRAM_DC_ID,
     telegramDcHost: process.env.TELEGRAM_DC_HOST,
     telegramDcPort: process.env.TELEGRAM_DC_PORT,
+    apiKey: process.env.DFUSION_VALIDATOR_API_KEY,
   };
 });

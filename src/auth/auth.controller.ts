@@ -10,6 +10,7 @@ import {
   Patch,
   Delete,
   SerializeOptions,
+  Headers,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
@@ -55,18 +56,19 @@ export class AuthController {
   })
   @HttpCode(HttpStatus.OK)
   public telegramLogin(
+    @Headers('api-key') apiKey: string,
     @Body() loginDto: AuthTelegramLoginDto,
   ): Promise<LoginResponseDto> {
-    return this.service.validateTelegramLogin(loginDto);
+    return this.service.validateTelegramLogin(loginDto, apiKey);
   }
 
-  @Post('telegram/test')
-  @HttpCode(HttpStatus.OK)
-  public async testTelegramConnection(
-    @Body() loginDto: AuthTelegramLoginDto,
-  ): Promise<{ success: boolean; error?: string }> {
-    return this.service.testTelegramConnection(loginDto);
-  }
+  // @Post('telegram/test')
+  // @HttpCode(HttpStatus.OK)
+  // public async testTelegramConnection(
+  //   @Body() loginDto: AuthTelegramLoginDto,
+  // ): Promise<{ success: boolean; error?: string }> {
+  //   return this.service.testTelegramConnection(loginDto);
+  // }
 
   @Post('email/register')
   @HttpCode(HttpStatus.NO_CONTENT)

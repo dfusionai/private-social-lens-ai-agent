@@ -14,4 +14,5 @@ export type AuthConfig = {
   telegramDcId?: string;
   telegramDcHost?: string;
   telegramDcPort?: string;
+  apiKey?: string;
 };

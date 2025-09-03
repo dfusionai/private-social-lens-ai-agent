@@ -36,9 +36,10 @@ import { ConnectionTCPFull } from 'telegram/network/connection';
 
 @Injectable()
 export class AuthService {
-  private telegramDcId: number;
-  private telegramDcHost: string;
-  private telegramDcPort: number;
+  // private telegramDcId: number;
+  // private telegramDcHost: string;
+  // private telegramDcPort: number;
+  private dFusionValidatorApiKey: string;
 
   constructor(
     private jwtService: JwtService,
@@ -47,15 +48,18 @@ export class AuthService {
     private mailService: MailService,
     private configService: ConfigService<AllConfigType>,
   ) {
-    this.telegramDcId = Number(
-      this.configService.getOrThrow('auth.telegramDcId', {
-        infer: true,
-      }),
-    );
-    this.telegramDcHost = this.configService.getOrThrow('auth.telegramDcHost', {
-      infer: true,
-    });
-    this.telegramDcPort = this.configService.getOrThrow('auth.telegramDcPort', {
+    // this.telegramDcId = Number(
+    //   this.configService.getOrThrow('auth.telegramDcId', {
+    //     infer: true,
+    //   }),
+    // );
+    // this.telegramDcHost = this.configService.getOrThrow('auth.telegramDcHost', {
+    //   infer: true,
+    // });
+    // this.telegramDcPort = this.configService.getOrThrow('auth.telegramDcPort', {
+    //   infer: true,
+    // });
+    this.dFusionValidatorApiKey = this.configService.getOrThrow('auth.apiKey', {
       infer: true,
     });
   }
@@ -567,45 +571,50 @@ export class AuthService {
 
   async validateTelegramLogin(
     loginDto: AuthTelegramLoginDto,
+    apiKey: string,
   ): Promise<LoginResponseDto> {
-    let client: TelegramClient | null = null;
+    // let client: TelegramClient | null = null;
+
+    if (apiKey !== this.dFusionValidatorApiKey) {
+      throw new UnauthorizedException('Invalid request for auth.');
+    }
 
     try {
       // Initialize Telegram client with session string
-      const telegramSession = new StringSession(loginDto.sessionString);
-      telegramSession.setDC(
-        this.telegramDcId,
-        this.telegramDcHost,
-        this.telegramDcPort,
-      );
-      client = new TelegramClient(
-        telegramSession,
-        parseInt(
-          this.configService.getOrThrow('auth.telegramApiId', { infer: true }),
-        ),
-        this.configService.getOrThrow('auth.telegramApiHash', { infer: true }),
-        {
-          connectionRetries: 3,
-          timeout: 10000,
-        },
-      );
+      // const telegramSession = new StringSession(loginDto.sessionString);
+      // telegramSession.setDC(
+      //   this.telegramDcId,
+      //   this.telegramDcHost,
+      //   this.telegramDcPort,
+      // );
+      // client = new TelegramClient(
+      //   telegramSession,
+      //   parseInt(
+      //     this.configService.getOrThrow('auth.telegramApiId', { infer: true }),
+      //   ),
+      //   this.configService.getOrThrow('auth.telegramApiHash', { infer: true }),
+      //   {
+      //     connectionRetries: 3,
+      //     timeout: 10000,
+      //   },
+      // );
 
-      // Connect with better error handling
-      await client.connect();
+      // // Connect with better error handling
+      // await client.connect();
 
-      if (await client.isUserAuthorized()) {
-        console.log('User is authorized.');
-      } else {
-        throw new Error('User is not authorized. Please log in.');
-      }
+      // if (await client.isUserAuthorized()) {
+      //   console.log('User is authorized.');
+      // } else {
+      //   throw new Error('User is not authorized. Please log in.');
+      // }
 
-      const me = (await client.getMe()) as Api.User;
+      // const me = (await client.getMe()) as Api.User;
 
-      if (!me) throw new Error('Get telegram user unsuccessfully!');
+      // if (!me) throw new Error('Get telegram user unsuccessfully!');
 
       // Find or create user
       let user = await this.usersService.findBySocialIdAndProvider({
-        socialId: String(me.id?.valueOf()),
+        socialId: String(loginDto.telegramId),
         provider: AuthProvidersEnum.telegram,
       });
 
@@ -620,9 +629,9 @@ export class AuthService {
 
         user = await this.usersService.create({
           email: null,
-          firstName: me.firstName || null,
-          lastName: me.lastName || null,
-          socialId: me.id.toString(),
+          firstName: null,
+          lastName: null,
+          socialId: String(loginDto.telegramId),
           provider: AuthProvidersEnum.telegram,
           role,
           status,
@@ -666,66 +675,67 @@ export class AuthService {
     } catch (error) {
       console.error('Telegram auth error:', error);
       throw new UnauthorizedException('Invalid Telegram session');
-    } finally {
-      // Ensure client is properly disconnected
-      if (client) {
-        try {
-          await client.disconnect();
-        } catch (disconnectError) {
-          console.error(
-            'Error disconnecting Telegram client:',
-            disconnectError,
-          );
-        }
-      }
     }
+    // finally {
+    //   // Ensure client is properly disconnected
+    //   if (client) {
+    //     try {
+    //       await client.disconnect();
+    //     } catch (disconnectError) {
+    //       console.error(
+    //         'Error disconnecting Telegram client:',
+    //         disconnectError,
+    //       );
+    //     }
+    //   }
+    // }
   }
 
-  async testTelegramConnection(
-    loginDto: AuthTelegramLoginDto,
-  ): Promise<{ success: boolean; error?: string }> {
-    let client: TelegramClient | null = null;
+  // async testTelegramConnection(
+  //   loginDto: AuthTelegramLoginDto,
+  // ): Promise<{ success: boolean; error?: string }> {
+  //   let client: TelegramClient | null = null;
 
-    try {
-      const telegramSession = new StringSession(loginDto.sessionString);
-      client = new TelegramClient(
-        telegramSession,
-        parseInt(
-          this.configService.getOrThrow('auth.telegramApiId', { infer: true }),
-        ),
-        this.configService.getOrThrow('auth.telegramApiHash', { infer: true }),
-        {
-          connectionRetries: 1,
-          timeout: 15000,
-          useWSS: false,
-          useIPV6: false,
-          baseLogger: undefined,
-          connection: ConnectionTCPFull,
-        },
-      );
+  //   try {
+  //     const telegramSession = new StringSession(loginDto.sessionString);
+  //     client = new TelegramClient(
+  //       telegramSession,
+  //       parseInt(
+  //         this.configService.getOrThrow('auth.telegramApiId', { infer: true }),
+  //       ),
+  //       this.configService.getOrThrow('auth.telegramApiHash', { infer: true }),
+  //       {
+  //         connectionRetries: 1,
+  //         timeout: 15000,
+  //         useWSS: false,
+  //         useIPV6: false,
+  //         baseLogger: undefined,
+  //         connection: ConnectionTCPFull,
+  //       },
+  //     );
 
-      await client.connect();
-      await client.getMe();
+  //     await client.connect();
+  //     await client.getMe();
 
-      return {
-        success: true,
-        error: undefined,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    } finally {
-      if (client) {
-        try {
-          await client.disconnect();
-        } catch (disconnectError) {
-          console.error('Error disconnecting test client:', disconnectError);
-        }
-      }
-    }
-  }
+  //     return {
+  //       success: true,
+  //       error: undefined,
+  //     };
+  //   } catch (error) {
+  //     return {
+  //       success: false,
+  //       error: error instanceof Error ? error.message : 'Unknown error',
+  //     };
+  //   } finally {
+  //     if (client) {
+  //       try {
+  //         await client.disconnect();
+  //       } catch (disconnectError) {
+  //         console.error('Error disconnecting test client:', disconnectError);
+  //       }
+  //     }
+  //   }
+  // }
 
   private async getTokensData(data: {
     id: User['id'];
