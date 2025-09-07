@@ -139,36 +139,36 @@ export class RagService {
 
     for (const result of results) {
       const {
-        refined_file_blob_id,
-        refined_file_on_chain_id,
+        original_blob_id,
+        on_chain_file_obj_id,
         policy_object_id,
         message_index,
       } = result.metadata;
 
       if (
-        refined_file_blob_id &&
-        refined_file_on_chain_id &&
+        original_blob_id &&
+        on_chain_file_obj_id &&
         policy_object_id &&
         message_index !== undefined
       ) {
         // Group by walrusBlobId to batch requests efficiently
-        if (!blobFileMap.has(refined_file_blob_id)) {
-          blobFileMap.set(refined_file_blob_id, {
-            walrusBlobId: refined_file_blob_id,
-            onChainFileObjId: refined_file_on_chain_id,
+        if (!blobFileMap.has(original_blob_id)) {
+          blobFileMap.set(original_blob_id, {
+            walrusBlobId: original_blob_id,
+            onChainFileObjId: on_chain_file_obj_id,
             policyObjectId: policy_object_id,
             messageIndices: [],
             results: [],
           });
         }
 
-        const blobData = blobFileMap.get(refined_file_blob_id)!;
+        const blobData = blobFileMap.get(original_blob_id)!;
         blobData.messageIndices.push(message_index);
         blobData.results.push(result);
       } else {
         // Results missing required Nautilus metadata
         this.logger.warn(
-          `Missing Nautilus metadata for result ${result.id}, skipping. Required: refined_file_blob_id, refined_file_on_chain_id, policy_object_id, message_index`,
+          `Missing Nautilus metadata for result ${JSON.stringify(result)}, skipping. Required: original_blob_id, on_chain_file_obj_id, policy_object_id, message_index`,
         );
         invalidResults.push(result);
       }
@@ -209,7 +209,7 @@ export class RagService {
         // Process all results from all blobs
         for (const [, blobData] of blobFileMap) {
           for (const result of blobData.results) {
-            const lookupKey = `${result.metadata.refined_file_blob_id}:${result.metadata.message_index}`;
+            const lookupKey = `${result.metadata.original_blob_id}:${result.metadata.message_index}`;
             const content = messageMap.get(lookupKey);
             if (content) {
               decryptedResults.push({
@@ -218,7 +218,7 @@ export class RagService {
               });
             } else {
               this.logger.warn(
-                `No content found for blob ${result.metadata.refined_file_blob_id} with message index ${result.metadata.message_index}, skipping`,
+                `No content found for blob ${JSON.stringify(result)} with message index ${result.metadata.message_index}, skipping`,
               );
             }
           }
