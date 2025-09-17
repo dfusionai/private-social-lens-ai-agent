@@ -296,7 +296,7 @@ Context: ${interpretation}`;
         status: 'error',
         data: { processed: false },
         version: '1.0.0',
-        message: `TEE data processing failed: ${JSON.stringify(error?.response?.data || {})}`,
+        message: `TEE data processing failed: ${JSON.stringify(error?.response?.data || error)}`,
         error: error.message,
       };
     }
