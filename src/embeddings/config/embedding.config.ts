@@ -8,6 +8,22 @@ export default registerAs(
     provider:
       (process.env.EMBEDDING_PROVIDER as EmbeddingProvider) ||
       EmbeddingProvider.OPENAI,
+    azureopenai: {
+      apiKey: process.env.AZURE_OPENAI_API_KEY || '',
+      model:
+        process.env.EMBEDDING_AZURE_OPENAI_MODEL || 'text-embedding-3-small',
+      dimensions: parseInt(
+        process.env.EMBEDDING_AZURE_OPENAI_DIMENSIONS || '768',
+      ),
+      timeout: parseInt(process.env.EMBEDDING_AZURE_OPENAI_TIMEOUT || '180000'),
+      retries: parseInt(process.env.EMBEDDING_AZURE_OPENAI_RETRIES || '3'),
+      endpoint: process.env.EMBEDDING_AZURE_OPENAI_ENDPOINT || '',
+      apiVersion:
+        process.env.EMBEDDING_AZURE_OPENAI_API_VERSION || '2024-04-01-preview',
+      deployment:
+        process.env.EMBEDDING_AZURE_OPENAI_DEPLOYMENT ||
+        'text-embedding-3-small',
+    },
     openai: {
       apiKey: process.env.OPENAI_API_KEY || '',
       model: process.env.EMBEDDING_OPENAI_MODEL || 'text-embedding-3-small',

@@ -292,11 +292,18 @@ Context: ${interpretation}`;
       };
     } catch (error) {
       this.logger.error('Failed to process data:', error);
+      let msg;
+      if (error?.response?.data) {
+        msg = `TEE data processing failed: ${JSON.stringify(error?.response?.data)}`;
+      } else {
+        msg = `TEE full error: ${JSON.stringify(error)}`;
+      }
+
       return {
         status: 'error',
         data: { processed: false },
         version: '1.0.0',
-        message: `TEE data processing failed: ${JSON.stringify(error?.response?.data || error)}`,
+        message: msg, //`TEE data processing failed: ${JSON.stringify(error?.response?.data || error)}`,
         error: error.message,
       };
     }

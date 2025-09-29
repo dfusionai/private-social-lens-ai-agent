@@ -13,6 +13,7 @@ import {
   EMBEDDING_MODEL_DIMENSIONS,
 } from './config/embedding-config';
 import { AllConfigType } from '../config/config.type';
+import { AzureOpenAIEmbeddingService } from './services/azure-openai-embedding.service';
 
 @Injectable()
 export class EmbeddingsFactoryService {
@@ -72,6 +73,24 @@ export class EmbeddingsFactoryService {
     };
 
     switch (provider) {
+      case EmbeddingProvider.AZUREOPENAI:
+        config.apiKey = this.configService.get('embedding.azureopenai.apiKey', {
+          infer: true,
+        });
+        config.endpoint = this.configService.get(
+          'embedding.azureopenai.endpoint',
+          { infer: true },
+        );
+        config.apiVersion = this.configService.get(
+          'embedding.azureopenai.apiVersion',
+          { infer: true },
+        );
+        config.deployment = this.configService.get(
+          'embedding.azureopenai.deployment',
+          { infer: true },
+        );
+        break;
+
       case EmbeddingProvider.OPENAI:
         config.apiKey =
           this.configService.get('embedding.openai.apiKey', { infer: true }) ||
@@ -96,6 +115,9 @@ export class EmbeddingsFactoryService {
     config: EmbeddingConfig,
   ): Promise<EmbeddingService> {
     switch (provider) {
+      case EmbeddingProvider.AZUREOPENAI:
+        return new AzureOpenAIEmbeddingService(config);
+
       case EmbeddingProvider.OPENAI:
         return new OpenAIEmbeddingService(config);
 
