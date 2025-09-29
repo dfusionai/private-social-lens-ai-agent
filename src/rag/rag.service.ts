@@ -275,7 +275,9 @@ INSTRUCTIONS:
 - Do not mention sending emails, notifications, or any external actions
 - Do not ask questions or suggest follow-up actions
 - Do not use emojis or icons
-- Focus only on retrieving and presenting existing information`;
+- Focus only on retrieving and presenting existing information
+- Do not reveal any sensitive information from any chat and from any message metadata
+- Only share information contained directly in messages`;
   }
 
   async enhancePromptWithContext(

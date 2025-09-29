@@ -1,6 +1,16 @@
 import { EmbeddingProvider } from '../enums/embedding-provider.enum';
 import { EmbeddingConfig } from '../interfaces/embedding.interface';
 
+export interface AzureOpenAIEmbeddingConfig extends EmbeddingConfig {
+  provider: EmbeddingProvider.AZUREOPENAI;
+  model: string;
+  dimensions: number;
+  apiKey: string;
+  endpoint: string;
+  apiVersion: string;
+  deployment: string;
+}
+
 export interface OpenAIEmbeddingConfig extends EmbeddingConfig {
   provider: EmbeddingProvider.OPENAI;
   model: string;
@@ -22,6 +32,7 @@ export interface TransformersEmbeddingConfig extends EmbeddingConfig {
 }
 
 export type EmbeddingProviderConfig =
+  | AzureOpenAIEmbeddingConfig
   | OpenAIEmbeddingConfig
   | OllamaEmbeddingConfig
   | TransformersEmbeddingConfig;
@@ -30,6 +41,12 @@ export const DEFAULT_EMBEDDING_CONFIGS: Record<
   EmbeddingProvider,
   Partial<EmbeddingConfig>
 > = {
+  [EmbeddingProvider.AZUREOPENAI]: {
+    model: 'text-embedding-3-small',
+    dimensions: 768,
+    timeout: 180000,
+    retries: 3,
+  },
   [EmbeddingProvider.OPENAI]: {
     model: 'text-embedding-3-small',
     dimensions: 1536,
@@ -53,7 +70,7 @@ export const DEFAULT_EMBEDDING_CONFIGS: Record<
 
 export const EMBEDDING_MODEL_DIMENSIONS: Record<string, number> = {
   // OpenAI models
-  'text-embedding-3-small': 1536,
+  'text-embedding-3-small': 768,
   'text-embedding-3-large': 3072,
   'text-embedding-ada-002': 1536,
 

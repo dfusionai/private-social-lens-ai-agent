@@ -8,6 +8,10 @@ export interface EmbeddingConfig {
   apiKey?: string;
   timeout?: number;
   retries?: number;
+  // azure
+  endpoint?: string;
+  apiVersion?: string;
+  deployment?: string;
 }
 
 export interface EmbeddingResponse {
