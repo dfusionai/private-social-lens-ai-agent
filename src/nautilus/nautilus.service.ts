@@ -59,16 +59,18 @@ export class NautilusService {
 
           const msg = result.message;
 
-          const isYou = msg.user_id == msg.from_id;
-          const speaker = isYou ? 'You' : `Someone (ID: ${msg.from_id})`;
-          const date = new Date(msg.date).toLocaleString();
+          const isYou = msg.user_id == msg?.from_id?.userId;
+          const speaker = isYou
+            ? 'You'
+            : `Someone (${msg.from_id ? `${msg.from_id.className}` : 'unknown'})`;
+          const date = new Date(Number(msg.date) * 1000).toLocaleString();
           const hasMessage = msg.message && msg.message.trim().length > 0;
           const message = msg.message;
           const interpretation = isYou
             ? `On ${date}, you told someone: "${message}" on conversation (ID: ${msg.chat_id}).`
             : `On ${date}, ${speaker} said: "${message}" on conversation (ID: ${msg.chat_id}).`;
 
-          const content = `Timestamp: ${msg.date}
+          const content = `Timestamp: ${date}
 Context: ${interpretation}`;
 
           if (hasMessage) {
