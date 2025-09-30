@@ -19,7 +19,7 @@ export interface DecryptedMessageContent {
   chat_id: number;
   date: string;
   edit_date: string | null;
-  from_id: string | null;
+  from_id: any; // "fromId": { "channelId": "", "className": "PeerChannel" }, "fromId": { "userId": "", "className": "PeerUser" }
   id: number;
   message: string;
   out: boolean;
