@@ -4,11 +4,15 @@ import { join } from 'path';
 import { SubmissionRepository } from '../infrastructure/persistence/submission.repository';
 import { UserBatchTrackingRepository } from '../infrastructure/persistence/user-batch-tracking.repository';
 import { AzureBlobStorageService } from './azure-blob-storage.service';
+import { WalrusQuiltService } from './walrus-quilt.service';
 import {
   DownloadedSubmission,
   BatchDownloadResult,
 } from '../domain/downloaded-submission';
 import { SubmissionData } from '../domain/submission';
+import { ConfigService } from '@nestjs/config';
+import { SubmissionConfig } from '../config/submission-config.type';
+import { AllConfigType } from '../../config/config.type';
 
 @Injectable()
 export class BatchDownloadService {
@@ -18,6 +22,8 @@ export class BatchDownloadService {
     private readonly submissionRepository: SubmissionRepository,
     private readonly userBatchTrackingRepository: UserBatchTrackingRepository,
     private readonly azureBlobStorage: AzureBlobStorageService,
+    private readonly walrusQuiltService: WalrusQuiltService,
+    private readonly configService: ConfigService<AllConfigType>,
   ) {}
 
   async processBatchDownload(
@@ -119,9 +125,31 @@ export class BatchDownloadService {
       // Write result to local file for inspection
       await this.writeResultToFile(result);
 
-      // Note: We don't reset batch tracking here yet
-      // That will happen after the blobs are processed for Walrus (Part 2)
-      // For now, we just return the downloaded data
+      // Process quilt (extract patches and write files for inspection)
+      // This will always run to generate inspection files, even if URL is not configured
+      const submissionConfig = this.configService.get<SubmissionConfig>(
+        'submission',
+        { infer: true },
+      );
+
+      try {
+        // Process quilt: extract patches, write files for inspection, and publish to Walrus
+        await this.walrusQuiltService.processAndPublishQuilt(
+          result,
+          submissionConfig.walrusQuiltEpochs || 1,
+        );
+
+        // If we get here, quilt was processed and published successfully
+        // Reset batch tracking after successful quilt processing
+        await this.resetBatchTracking(userId);
+      } catch (error) {
+        // Real error - don't reset batch tracking to allow retry
+        this.logger.error(
+          `Failed to process quilt for user ${userId}:`,
+          error,
+        );
+        throw error;
+      }
 
       return result;
     } catch (error) {

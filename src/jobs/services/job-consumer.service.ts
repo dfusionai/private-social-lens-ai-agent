@@ -64,12 +64,14 @@ export class JobConsumerService {
           `Processing job ${customJobId} (${job.id}) for user ${userId} with type ${jobType}`,
         );
 
-        // Update job status to processing
-        await this.updateJobStatus(customJobId, JobStatus.PROCESSING, {
-          startedAt: new Date(),
-          workerId,
-          pgBossJobId: job.id,
-        });
+        // Update job status to processing (skip for batch download jobs - not tracked in job table)
+        if (jobType !== JobType.BATCH_DOWNLOAD) {
+          await this.updateJobStatus(customJobId, JobStatus.PROCESSING, {
+            startedAt: new Date(),
+            workerId,
+            pgBossJobId: job.id,
+          });
+        }
 
         // Handle different job types
         let jobResult: any;
@@ -87,16 +89,8 @@ export class JobConsumerService {
               metadata?.batchTrackingId,
             );
 
-          // Save result and update status
-          await this.updateJobStatus(customJobId, JobStatus.COMPLETED, {
-            resultData: {
-              message: 'Batch download completed successfully',
-              submissionCount: downloadResult.submissions.length,
-              totalChats: downloadResult.totalChats,
-              downloadedAt: downloadResult.downloadedAt,
-            },
-            completedAt: new Date(),
-          });
+          // Batch download jobs are not tracked in the job table, so skip status update
+          // Results are tracked via batch tracking and file outputs
 
           jobResult = {
             message: 'Batch download completed successfully',
@@ -142,10 +136,13 @@ export class JobConsumerService {
         const duration = Date.now() - startTime;
         const customJobId = job.data?.customJobId || 'unknown';
 
-        await this.updateJobStatus(customJobId, JobStatus.FAILED, {
-          errorMessage: error.message,
-          failedAt: new Date(),
-        });
+        // Update job status to failed (skip for batch download jobs - not tracked in job table)
+        if (job.data?.jobType !== JobType.BATCH_DOWNLOAD) {
+          await this.updateJobStatus(customJobId, JobStatus.FAILED, {
+            errorMessage: error.message,
+            failedAt: new Date(),
+          });
+        }
 
         this.logger.error(
           `Job ${customJobId} (${job.id}) failed after ${duration}ms:`,
@@ -208,6 +205,9 @@ export class JobConsumerService {
     additionalData: any = {},
   ): Promise<void> {
     try {
+      // Update job status in database
+      // Note: This method is only called for jobs that are tracked in the job table
+      // Batch download jobs are handled separately and skip this method
       await this.jobRepository.update(jobId, {
         status,
         ...additionalData,

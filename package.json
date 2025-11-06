@@ -97,6 +97,7 @@
     "@swc/core": "1.11.31",
     "@types/bcryptjs": "3.0.0",
     "@types/express": "5.0.3",
+    "@types/form-data": "^2.2.1",
     "@types/jest": "30.0.0",
     "@types/ms": "2.1.0",
     "@types/multer": "2.0.0",
