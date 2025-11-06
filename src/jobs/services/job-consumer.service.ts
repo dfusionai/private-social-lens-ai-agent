@@ -1,11 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Optional,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { JobRepository } from '../infrastructure/persistence/job.repository';
 import { JobStatus } from '../enums/job-status.enum';
+import { JobType } from '../enums/job-type.enum';
 import { ConfigService } from '@nestjs/config';
 import { AllConfigType } from '../../config/config.type';
 import { JobConfig } from '../config/job-config.type';
 import { NautilusService } from '../../nautilus/nautilus.service';
 import { PgBossJob } from '../interfaces/job-data.interface';
+import { BatchDownloadService } from '../../submissions/services/batch-download.service';
 
 @Injectable()
 export class JobConsumerService {
@@ -15,6 +23,9 @@ export class JobConsumerService {
     private readonly jobRepository: JobRepository,
     private readonly configService: ConfigService<AllConfigType>,
     private readonly nautilusService: NautilusService,
+    @Optional()
+    @Inject(forwardRef(() => BatchDownloadService))
+    private readonly batchDownloadService?: BatchDownloadService,
   ) {}
 
   async processJob(jobs: PgBossJob[]): Promise<any[]> {
@@ -46,6 +57,7 @@ export class JobConsumerService {
           onchainFileId,
           policyId,
           jobType,
+          metadata,
         } = job.data;
 
         this.logger.log(
@@ -59,24 +71,51 @@ export class JobConsumerService {
           pgBossJobId: job.id,
         });
 
-        // Process data using Nautilus TEE service
-        const result = await this.nautilusService.processData({
-          payload: {
-            blobId,
-            onchainFileId,
-            policyId,
-          },
-        });
+        // Handle different job types
+        let jobResult: any;
+        if (jobType === JobType.BATCH_DOWNLOAD) {
+          if (!this.batchDownloadService) {
+            throw new Error(
+              'BatchDownloadService is not available. Make sure SubmissionsModule is imported.',
+            );
+          }
 
-        if (result.status !== 'success') {
-          throw new Error(`TEE processing failed: ${result.message}`);
+          // Process batch download
+          await this.batchDownloadService.processBatchDownload(
+            userId,
+            metadata?.batchTrackingId,
+            metadata?.downloadServiceUrl,
+          );
+
+          // Save result and update status
+          await this.updateJobStatus(customJobId, JobStatus.COMPLETED, {
+            resultData: { message: 'Batch download triggered successfully' },
+            completedAt: new Date(),
+          });
+
+          jobResult = { message: 'Batch download triggered successfully' };
+        } else {
+          // Process data using Nautilus TEE service
+          const result = await this.nautilusService.processData({
+            payload: {
+              blobId,
+              onchainFileId,
+              policyId,
+            },
+          });
+
+          if (result.status !== 'success') {
+            throw new Error(`TEE processing failed: ${result.message}`);
+          }
+
+          // Save result and update status
+          await this.updateJobStatus(customJobId, JobStatus.COMPLETED, {
+            resultData: result.data,
+            completedAt: new Date(),
+          });
+
+          jobResult = result.data;
         }
-
-        // Save result and update status
-        await this.updateJobStatus(customJobId, JobStatus.COMPLETED, {
-          resultData: result.data,
-          completedAt: new Date(),
-        });
 
         const duration = Date.now() - startTime;
         this.logger.log(
@@ -87,7 +126,7 @@ export class JobConsumerService {
           jobId: job.id,
           customJobId,
           success: true,
-          result: result.data,
+          result: jobResult,
           duration,
         });
       } catch (error) {

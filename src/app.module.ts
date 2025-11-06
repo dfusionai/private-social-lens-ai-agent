@@ -34,6 +34,8 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
 import { ConversationsModule } from './conversations/conversations.module';
 import { MessagesModule } from './messages/messages.module';
 import { JobsModule } from './jobs/jobs.module';
+import { SubmissionsModule } from './submissions/submissions.module';
+import submissionConfig from './submissions/config/submission.config';
 
 import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-configs.module';
 
@@ -43,6 +45,7 @@ import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-co
     MessagesModule,
     ConversationsModule,
     JobsModule,
+    SubmissionsModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [
@@ -56,20 +59,30 @@ import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-co
         claudeConfig,
         ollamaConfig,
         jobConfig,
+        submissionConfig,
       ],
       envFilePath: ['.env'],
     }),
     infrastructureDatabaseModule,
     I18nModule.forRootAsync({
-      useFactory: (configService: ConfigService<AllConfigType>) => ({
-        fallbackLanguage: configService.getOrThrow('app.fallbackLanguage', {
-          infer: true,
-        }),
-        loaderOptions: {
-          path: path.join(__dirname, '/i18n/'),
-          watch: configService.get('app.i18nWatchFiles', { infer: true }),
-        },
-      }),
+      useFactory: (configService: ConfigService<AllConfigType>) => {
+        // In development, use source directory; in production, use dist directory
+        const isDevelopment =
+          configService.get('app.nodeEnv', { infer: true }) === 'development';
+        const i18nPath = isDevelopment
+          ? path.join(process.cwd(), 'src', 'i18n')
+          : path.join(__dirname, 'i18n');
+
+        return {
+          fallbackLanguage: configService.getOrThrow('app.fallbackLanguage', {
+            infer: true,
+          }),
+          loaderOptions: {
+            path: i18nPath,
+            watch: configService.get('app.i18nWatchFiles', { infer: true }),
+          },
+        };
+      },
       resolvers: [
         {
           use: HeaderResolver,

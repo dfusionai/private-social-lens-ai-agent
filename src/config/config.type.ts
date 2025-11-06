@@ -10,6 +10,7 @@ import { GeminiConfig } from '../model-api/config/gemini-config.type';
 import { OllamaConfig } from '../model-api/config/ollama-config.type';
 import { EmbeddingConfig } from '../embeddings/config/embedding-config.type';
 import { JobConfig } from '../jobs/config/job-config.type';
+import { SubmissionConfig } from '../submissions/config/submission-config.type';
 
 export type AllConfigType = {
   app: AppConfig;
@@ -24,4 +25,5 @@ export type AllConfigType = {
   ollama: OllamaConfig;
   embedding: EmbeddingConfig;
   job: JobConfig;
+  submission: SubmissionConfig;
 };

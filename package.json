@@ -43,6 +43,7 @@
     "@anthropic-ai/sdk": "^0.56.0",
     "@aws-sdk/client-s3": "3.826.0",
     "@aws-sdk/s3-request-presigner": "3.826.0",
+    "@azure/storage-blob": "^12.29.1",
     "@google/generative-ai": "^0.24.1",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "11.1.3",
