@@ -112,7 +112,13 @@ Original error: ${error.message}`;
         },
       };
 
-      await blockBlobClient.upload(data, data.length, uploadOptions);
+      // Calculate correct length for string or Buffer
+      const dataLength =
+        typeof data === 'string'
+          ? Buffer.byteLength(data, 'utf8')
+          : data.length;
+
+      await blockBlobClient.upload(data, dataLength, uploadOptions);
 
       const blobUrl = blockBlobClient.url;
       this.logger.log(`Uploaded blob: ${blobName} to ${blobUrl}`);

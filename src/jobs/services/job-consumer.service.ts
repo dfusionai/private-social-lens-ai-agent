@@ -80,20 +80,29 @@ export class JobConsumerService {
             );
           }
 
-          // Process batch download
-          await this.batchDownloadService.processBatchDownload(
-            userId,
-            metadata?.batchTrackingId,
-            metadata?.downloadServiceUrl,
-          );
+          // Process batch download - fetch blobs from Azure
+          const downloadResult =
+            await this.batchDownloadService.processBatchDownload(
+              userId.toString(),
+              metadata?.batchTrackingId,
+            );
 
           // Save result and update status
           await this.updateJobStatus(customJobId, JobStatus.COMPLETED, {
-            resultData: { message: 'Batch download triggered successfully' },
+            resultData: {
+              message: 'Batch download completed successfully',
+              submissionCount: downloadResult.submissions.length,
+              totalChats: downloadResult.totalChats,
+              downloadedAt: downloadResult.downloadedAt,
+            },
             completedAt: new Date(),
           });
 
-          jobResult = { message: 'Batch download triggered successfully' };
+          jobResult = {
+            message: 'Batch download completed successfully',
+            submissionCount: downloadResult.submissions.length,
+            totalChats: downloadResult.totalChats,
+          };
         } else {
           // Process data using Nautilus TEE service
           const result = await this.nautilusService.processData({

@@ -1,6 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { HttpModule } from '@nestjs/axios';
 import { SubmissionsController } from './submissions.controller';
 import { RelationalSubmissionPersistenceModule } from './infrastructure/persistence/relational/relational-persistence.module';
 import { SubmissionService } from './services/submission.service';
@@ -12,7 +11,6 @@ import submissionConfig from './config/submission.config';
 @Module({
   imports: [
     ConfigModule.forFeature(submissionConfig),
-    HttpModule,
     RelationalSubmissionPersistenceModule,
     forwardRef(() => JobsModule),
   ],

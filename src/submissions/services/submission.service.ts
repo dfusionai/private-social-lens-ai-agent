@@ -156,20 +156,7 @@ export class SubmissionService {
         batchStatus: 'processing',
       });
 
-      // Queue job to download blobs
-      const submissionConfig = this.configService.get<SubmissionConfig>(
-        'submission',
-        { infer: true },
-      );
-
-      if (!submissionConfig.batchDownloadServiceUrl) {
-        this.logger.warn(
-          'Batch download service URL not configured. Skipping batch processing trigger.',
-        );
-        return;
-      }
-
-      // Queue a job to process the batch
+      // Queue a job to download blobs from Azure and process them
       await this.pgBossQueue.addJob(userId, {
         customJobId: uuidv4(),
         jobType: JobType.BATCH_DOWNLOAD,
@@ -181,7 +168,6 @@ export class SubmissionService {
           userId: userId.toString(),
           batchTrackingId: batchTracking.id,
           chatCount: batchTracking.chatCount,
-          downloadServiceUrl: submissionConfig.batchDownloadServiceUrl,
         },
       });
 
