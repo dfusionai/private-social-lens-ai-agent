@@ -29,6 +29,19 @@ class EnvironmentVariablesValidator {
   @Min(1)
   WALRUS_QUILT_EPOCHS?: number;
 
+  @IsOptional()
+  @IsString()
+  WALRUS_PUBLISHER_JWT_SECRET?: string;
+
+  @IsOptional()
+  @IsString()
+  WALRUS_PUBLISHER_JWT_ALGORITHM?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  WALRUS_PUBLISHER_JWT_EXPIRING_SEC?: number;
+
   @IsString()
   POLICY_OBJECT_ID: string;
 }
@@ -50,6 +63,11 @@ export default registerAs<SubmissionConfig>('submission', () => {
     walrusQuiltEpochs: process.env.WALRUS_QUILT_EPOCHS
       ? parseInt(process.env.WALRUS_QUILT_EPOCHS, 10)
       : 1,
+    walrusPublisherJwtSecret: process.env.WALRUS_PUBLISHER_JWT_SECRET,
+    walrusPublisherJwtAlgorithm: process.env.WALRUS_PUBLISHER_JWT_ALGORITHM,
+    walrusPublisherJwtExpiringSec: process.env.WALRUS_PUBLISHER_JWT_EXPIRING_SEC
+      ? parseInt(process.env.WALRUS_PUBLISHER_JWT_EXPIRING_SEC, 10)
+      : 300, // Default 5 minutes
     policyObjectId: process.env.POLICY_OBJECT_ID || '',
   };
 });

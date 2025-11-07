@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
+import { JwtService } from '@nestjs/jwt';
+import { randomUUID } from 'crypto';
 import FormData from 'form-data';
 import {
   QuiltPatch,
@@ -20,6 +22,7 @@ export class WalrusQuiltService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService<AllConfigType>,
     private readonly idMasker: IdMaskerService,
+    private readonly jwtService: JwtService,
   ) {}
 
   /**
@@ -132,9 +135,63 @@ export class WalrusQuiltService {
       }));
       formData.append('_metadata', JSON.stringify(metadataArray));
 
+      // Generate JWT token if JWT secret is configured
+      let authHeader: string | undefined;
+      if (submissionConfig.walrusPublisherJwtSecret) {
+        const now = Math.floor(Date.now() / 1000);
+        const expiringSec =
+          submissionConfig.walrusPublisherJwtExpiringSec || 300; // Default 5 minutes
+        const exp = now + expiringSec;
+
+        const payload: any = {
+          exp, // Expiration timestamp (required)
+          jti: randomUUID(), // JWT ID - unique identifier to prevent replay attacks (required)
+          iat: now, // Issued at (optional)
+          epochs, // Exact number of epochs (per Walrus spec)
+        };
+
+        // Sign JWT with the secret
+        // Handle hex-encoded secret (with or without 0x prefix)
+        let jwtSecret: string | Buffer =
+          submissionConfig.walrusPublisherJwtSecret;
+        if (jwtSecret && typeof jwtSecret === 'string') {
+          // If secret starts with 0x, remove it and convert hex to buffer
+          if (jwtSecret.startsWith('0x')) {
+            const secretHex = jwtSecret.slice(2);
+            jwtSecret = Buffer.from(secretHex, 'hex');
+          } else if (/^[0-9a-fA-F]+$/.test(jwtSecret)) {
+            // If it's a hex string without 0x, convert to buffer
+            jwtSecret = Buffer.from(jwtSecret, 'hex');
+          }
+        }
+
+        const algorithm = (submissionConfig.walrusPublisherJwtAlgorithm ||
+          'HS256') as any;
+        const token = await this.jwtService.signAsync(payload, {
+          secret: jwtSecret,
+          algorithm, // Default algorithm for Walrus publisher
+        });
+
+        authHeader = `Bearer ${token}`;
+
+        this.logger.debug(
+          `JWT token generated with claims: epochs=${payload.epochs}, jti=${payload.jti}`,
+        );
+      } else {
+        this.logger.warn(
+          'Walrus publisher JWT secret not configured. Request will be sent without authentication.',
+        );
+      }
+
       // Send HTTP request to Walrus publisher
-      const url = `${submissionConfig.walrusPublisherUrl}/v1/quilts?epochs=${epochs}`;
+      const baseUrl = submissionConfig.walrusPublisherUrl.replace(/\/$/, ''); // Remove trailing slash
+      const url = `${baseUrl}/v1/quilts?epochs=${epochs}`;
       const headers = formData.getHeaders();
+
+      // Add Authorization header if JWT token was generated
+      if (authHeader) {
+        headers['Authorization'] = authHeader;
+      }
 
       this.logger.debug(`Sending PUT request to ${url}`);
 
@@ -203,17 +260,67 @@ export class WalrusQuiltService {
       );
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to publish quilt to Walrus:', error);
 
       // If it's an HTTP error, log more details
       if (error.response) {
-        this.logger.error(
-          `HTTP error response: ${error.response.status} - ${JSON.stringify(error.response.data)}`,
-        );
-      }
+        const status = error.response.status;
+        const errorData = error.response.data;
+        let errorMessage: string;
 
-      throw error;
+        try {
+          // Walrus publisher returns errors in nested structure: {error: {message: "...", ...}}
+          if (typeof errorData === 'object' && errorData !== null) {
+            errorMessage =
+              errorData?.error?.message ||
+              errorData?.message ||
+              error.message ||
+              `HTTP ${status}`;
+          } else if (typeof errorData === 'string') {
+            // Try to parse as JSON
+            try {
+              const parsed = JSON.parse(errorData);
+              errorMessage =
+                parsed?.error?.message ||
+                parsed?.message ||
+                errorData ||
+                `HTTP ${status}`;
+            } catch {
+              errorMessage = errorData || `HTTP ${status}`;
+            }
+          } else {
+            errorMessage = `HTTP ${status}`;
+          }
+        } catch {
+          errorMessage = `HTTP ${status}`;
+        }
+
+        // Provide specific error messages for common scenarios
+        if (status === 401 || status === 403) {
+          this.logger.error(
+            `Publisher authentication failed (${status}): ${errorMessage}.`,
+          );
+          throw new Error(
+            `Authentication failed: Publisher rejected JWT token.`,
+          );
+        } else {
+          this.logger.error(`Publisher returned ${status}: ${errorMessage}`);
+          throw new Error(`HTTP ${status}: ${errorMessage}`);
+        }
+      } else if (error.request) {
+        // Request was made but no response received (network error, connection aborted, etc.)
+        this.logger.error(
+          `Request failed: No response received from publisher. This may indicate: 1) Network connectivity issue, 2) Publisher server closed the connection, or 3) Timeout.`,
+        );
+        throw new Error(
+          `Request failed: No response received from publisher. Check network connectivity and publisher status.`,
+        );
+      } else {
+        // Error occurred in setting up the request
+        this.logger.error(`Request setup failed: ${error.message}`);
+        throw new Error(`Request setup failed: ${error.message}`);
+      }
     }
   }
 

@@ -6,5 +6,8 @@ export type SubmissionConfig = {
   batchChatMaxThreshold: number;
   walrusPublisherUrl: string;
   walrusQuiltEpochs?: number;
+  walrusPublisherJwtSecret?: string;
+  walrusPublisherJwtAlgorithm?: string;
+  walrusPublisherJwtExpiringSec?: number;
   policyObjectId: string;
 };
