@@ -149,6 +149,9 @@ export class BatchDownloadService {
         );
 
         // If we get here, quilt was processed and published successfully
+        // Clean up: mark submissions as deleted and remove Azure blobs
+        await this.cleanupProcessedSubmissions(downloadedSubmissions);
+
         // Reset batch tracking after successful quilt processing
         await this.resetBatchTracking(userId);
       } catch (error) {
@@ -191,6 +194,66 @@ export class BatchDownloadService {
       });
       this.logger.log(
         `Reset batch tracking for user ${this.idMasker.maskUserId(userId)}`,
+      );
+    }
+  }
+
+  /**
+   * Clean up processed submissions after successful quilt upload:
+   * 1. Mark submissions as deleted (soft delete) in database
+   * 2. Delete blobs from Azure Blob Storage
+   */
+  private async cleanupProcessedSubmissions(
+    downloadedSubmissions: DownloadedSubmission[],
+  ): Promise<void> {
+    this.logger.log(
+      `Starting cleanup for ${downloadedSubmissions.length} processed submissions`,
+    );
+
+    const cleanupErrors: Array<{ submissionId: string; error: string }> = [];
+
+    // Process each submission cleanup
+    for (const submission of downloadedSubmissions) {
+      try {
+        // 1. Mark submission as deleted (soft delete) in database
+        await this.submissionRepository.remove(submission.submissionId);
+        this.logger.debug(
+          `Marked submission ${this.idMasker.maskSubmissionId(submission.submissionId)} as deleted`,
+        );
+
+        // 2. Delete blob from Azure Blob Storage
+        await this.azureBlobStorage.deleteBlob(submission.blobName);
+        this.logger.debug(
+          `Deleted Azure blob ${submission.blobName} for submission ${this.idMasker.maskSubmissionId(submission.submissionId)}`,
+        );
+      } catch (error) {
+        // Log error but continue with other submissions
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        cleanupErrors.push({
+          submissionId: submission.submissionId,
+          error: errorMessage,
+        });
+        this.logger.error(
+          `Failed to cleanup submission ${this.idMasker.maskSubmissionId(submission.submissionId)} (blob: ${submission.blobName}):`,
+          error,
+        );
+      }
+    }
+
+    // Log summary
+    const successCount = downloadedSubmissions.length - cleanupErrors.length;
+    this.logger.log(
+      `Cleanup completed: ${successCount}/${downloadedSubmissions.length} submissions cleaned up successfully`,
+    );
+
+    if (cleanupErrors.length > 0) {
+      this.logger.warn(
+        `Cleanup errors for ${cleanupErrors.length} submissions. These submissions may be reprocessed in the next batch.`,
+        cleanupErrors.map((e) => ({
+          submissionId: this.idMasker.maskSubmissionId(e.submissionId),
+          error: e.error,
+        })),
       );
     }
   }
