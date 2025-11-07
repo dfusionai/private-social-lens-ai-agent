@@ -125,6 +125,7 @@ export class SubmissionsController {
               maxRetries: { type: 'number', example: 3 },
               errorMessage: { type: 'string', nullable: true },
               quiltId: { type: 'string', nullable: true },
+              epochs: { type: 'number', nullable: true, example: 53 },
               createdAt: { type: 'string', format: 'date-time' },
             },
           },
@@ -145,6 +146,7 @@ export class SubmissionsController {
             maxRetries: { type: 'number', example: 3 },
             errorMessage: { type: 'string', nullable: true },
             quiltId: { type: 'string', nullable: true },
+            epochs: { type: 'number', nullable: true, example: 53 },
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
@@ -187,6 +189,7 @@ export class SubmissionsController {
         maxRetries: batch.maxRetries,
         errorMessage: batch.errorMessage,
         quiltId: batch.quiltId,
+        epochs: batch.epochs,
         createdAt: batch.createdAt,
       })),
       latestBatch: latestBatch
@@ -199,6 +202,7 @@ export class SubmissionsController {
             maxRetries: latestBatch.maxRetries,
             errorMessage: latestBatch.errorMessage,
             quiltId: latestBatch.quiltId,
+            epochs: latestBatch.epochs,
             createdAt: latestBatch.createdAt,
           }
         : null,

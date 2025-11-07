@@ -34,6 +34,9 @@ export class Batch {
   quiltBlobId?: string;
 
   @Expose()
+  epochs?: number;
+
+  @Expose()
   createdAt: Date;
 
   @Expose()

@@ -44,6 +44,18 @@ class EnvironmentVariablesValidator {
 
   @IsString()
   POLICY_OBJECT_ID: string;
+
+  @IsOptional()
+  @IsString()
+  VANA_BLOCKCHAIN_RPC_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  VFSN_TOKEN_CONTRACT_ADDRESS?: string;
+
+  @IsOptional()
+  @IsString()
+  STAKING_CONTRACT_ADDRESS?: string;
 }
 
 export default registerAs<SubmissionConfig>('submission', () => {
@@ -69,5 +81,8 @@ export default registerAs<SubmissionConfig>('submission', () => {
       ? parseInt(process.env.WALRUS_PUBLISHER_JWT_EXPIRING_SEC, 10)
       : 300, // Default 5 minutes
     policyObjectId: process.env.POLICY_OBJECT_ID || '',
+    blockchainRpcUrl: process.env.VANA_BLOCKCHAIN_RPC_URL,
+    tokenContractAddress: process.env.VFSN_TOKEN_CONTRACT_ADDRESS,
+    stakingContractAddress: process.env.STAKING_CONTRACT_ADDRESS,
   };
 });

@@ -10,6 +10,7 @@ export interface SubmissionData {
   source: string;
   user: string;
   submission_token: string;
+  walletAddress: string;
   chats: Chat[];
 }
 

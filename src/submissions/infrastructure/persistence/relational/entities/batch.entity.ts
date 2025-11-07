@@ -81,6 +81,12 @@ export class BatchEntity extends EntityRelationalHelper {
   })
   quiltBlobId?: string;
 
+  @Column({
+    type: 'int',
+    nullable: true,
+  })
+  epochs?: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

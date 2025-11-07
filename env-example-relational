@@ -157,6 +157,10 @@ WALRUS_QUILT_EPOCHS=
 
 POLICY_OBJECT_ID=your-policy-id-here
 
+VANA_BLOCKCHAIN_RPC_URL==
+VFSN_TOKEN_CONTRACT_ADDRESS=
+STAKING_CONTRACT_ADDRESS=
+
 # ID Masking (for privacy in logs and files)
 # Set a secret salt for deterministic ID masking
 # Same input always produces same masked output

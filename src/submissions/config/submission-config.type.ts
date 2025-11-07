@@ -10,4 +10,7 @@ export type SubmissionConfig = {
   walrusPublisherJwtAlgorithm?: string;
   walrusPublisherJwtExpiringSec?: number;
   policyObjectId: string;
+  blockchainRpcUrl?: string;
+  tokenContractAddress?: string;
+  stakingContractAddress?: string;
 };

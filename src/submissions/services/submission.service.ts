@@ -53,6 +53,7 @@ export class SubmissionService {
         source: createSubmissionDto.source,
         user: userId, // Use authenticated user's socialId (telegram ID)
         submission_token: createSubmissionDto.submission_token,
+        walletAddress: createSubmissionDto.walletAddress,
         chats: createSubmissionDto.chats,
       };
 
@@ -162,7 +163,7 @@ export class SubmissionService {
       !latestBatch ||
       latestBatch.batchStatus === 'failed' ||
       latestBatch.batchStatus === 'processing' ||
-      (latestBatch.chatCount + submissionChatCount) >
+      latestBatch.chatCount + submissionChatCount >
         submissionConfig.batchChatMaxThreshold;
 
     if (needsNewBatch) {

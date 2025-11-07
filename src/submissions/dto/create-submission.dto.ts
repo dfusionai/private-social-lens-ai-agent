@@ -50,6 +50,14 @@ export class CreateSubmissionDto {
   submission_token: string;
 
   @ApiProperty({
+    description: 'Wallet address for token gating',
+    example: '0x1234567890123456789012345678901234567890',
+  })
+  @IsString()
+  @IsNotEmpty()
+  walletAddress: string;
+
+  @ApiProperty({
     description: 'Array of chats',
     type: [ChatDto],
   })

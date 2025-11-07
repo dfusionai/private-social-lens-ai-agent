@@ -14,6 +14,7 @@ export class BatchMapper {
       errorMessage: raw.errorMessage,
       quiltId: raw.quiltId,
       quiltBlobId: raw.quiltBlobId,
+      epochs: raw.epochs,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
     });
@@ -37,6 +38,7 @@ export class BatchMapper {
     persistenceEntity.errorMessage = domainEntity.errorMessage;
     persistenceEntity.quiltId = domainEntity.quiltId;
     persistenceEntity.quiltBlobId = domainEntity.quiltBlobId;
+    persistenceEntity.epochs = domainEntity.epochs;
     persistenceEntity.createdAt = domainEntity.createdAt;
     persistenceEntity.updatedAt = domainEntity.updatedAt;
 

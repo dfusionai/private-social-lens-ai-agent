@@ -3,6 +3,7 @@ import { SubmissionRepository } from '../infrastructure/persistence/submission.r
 import { BatchRepository } from '../infrastructure/persistence/batch.repository';
 import { AzureBlobStorageService } from './azure-blob-storage.service';
 import { WalrusQuiltService } from './walrus-quilt.service';
+import { BlockchainService } from './blockchain.service';
 import {
   DownloadedSubmission,
   BatchDownloadResult,
@@ -16,6 +17,7 @@ import { JobProducerService } from '../../jobs/services/job-producer.service';
 import { JobType } from '../../jobs/enums/job-type.enum';
 import { UsersService } from '../../users/users.service';
 import { AuthProvidersEnum } from '../../auth/auth-providers.enum';
+import { tokenGatingConfigsService } from '../../token-gating-configs/token-gating-configs.service';
 
 @Injectable()
 export class BatchDownloadService {
@@ -26,6 +28,8 @@ export class BatchDownloadService {
     private readonly batchRepository: BatchRepository,
     private readonly azureBlobStorage: AzureBlobStorageService,
     private readonly walrusQuiltService: WalrusQuiltService,
+    private readonly blockchainService: BlockchainService,
+    private readonly tokenGatingConfigsService: tokenGatingConfigsService,
     private readonly configService: ConfigService<AllConfigType>,
     private readonly idMasker: IdMaskerService,
     @Inject(forwardRef(() => JobProducerService))
@@ -158,12 +162,59 @@ export class BatchDownloadService {
       );
 
       try {
+        // Calculate epochs based on token gating
+        // Extract wallet address from first submission (all submissions in a batch should have the same wallet address)
+        let epochs = submissionConfig.walrusQuiltEpochs || 1;
+
+        if (downloadedSubmissions.length > 0) {
+          const firstSubmission = downloadedSubmissions[0];
+          const walletAddress = firstSubmission.data.walletAddress;
+
+          if (walletAddress) {
+            try {
+              // Get token gating config
+              const tokenGatingConfig =
+                await this.tokenGatingConfigsService.getLatestConfig();
+
+              if (tokenGatingConfig) {
+                const { stakeThreshold, balanceThreshold } = tokenGatingConfig;
+
+                // Check if wallet meets token gating requirements
+                const isAllowed = await this.blockchainService.checkTokenGating(
+                  walletAddress,
+                  stakeThreshold,
+                  balanceThreshold,
+                );
+
+                // If not allowed, epochs = 1, else epochs = 53
+                epochs = isAllowed ? 53 : 1;
+
+                this.logger.log(
+                  `Token gating check for wallet ${walletAddress}: allowed=${isAllowed}, epochs=${epochs}`,
+                );
+              } else {
+                this.logger.warn(
+                  'No token gating config found. Using default epochs.',
+                );
+              }
+            } catch (error) {
+              this.logger.error(
+                `Failed to check token gating for wallet ${walletAddress}. Using default epochs:`,
+                error,
+              );
+              // On error, default to epochs = 1
+              epochs = 1;
+            }
+          } else {
+            this.logger.warn(
+              'No wallet address found in submission. Using default epochs.',
+            );
+          }
+        }
+
         // Process quilt: extract patches, write files for inspection, and publish to Walrus
         const blobStoreResult =
-          await this.walrusQuiltService.processAndPublishQuilt(
-            result,
-            submissionConfig.walrusQuiltEpochs || 1,
-          );
+          await this.walrusQuiltService.processAndPublishQuilt(result, epochs);
 
         this.logger.log(
           `Blob store result: ${JSON.stringify(blobStoreResult)}`,
@@ -178,6 +229,7 @@ export class BatchDownloadService {
           batchStatus: 'completed',
           quiltId: blobStoreResult?.quiltId,
           quiltBlobId: blobStoreResult?.quiltBlobId,
+          epochs: epochs,
         });
 
         // Create Nautilus job to process the quilt
