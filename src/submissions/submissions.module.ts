@@ -8,6 +8,7 @@ import { AzureBlobStorageService } from './services/azure-blob-storage.service';
 import { BatchDownloadService } from './services/batch-download.service';
 import { WalrusQuiltService } from './services/walrus-quilt.service';
 import { JobsModule } from '../jobs/jobs.module';
+import { IdMaskerService } from '../utils/id-masker.service';
 import submissionConfig from './config/submission.config';
 
 @Module({
@@ -23,6 +24,7 @@ import submissionConfig from './config/submission.config';
     AzureBlobStorageService,
     BatchDownloadService,
     WalrusQuiltService,
+    IdMaskerService,
   ],
   exports: [
     SubmissionService,

@@ -13,6 +13,7 @@ import { SubmissionData } from '../domain/submission';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionConfig } from '../config/submission-config.type';
 import { AllConfigType } from '../../config/config.type';
+import { IdMaskerService } from '../../utils/id-masker.service';
 
 @Injectable()
 export class BatchDownloadService {
@@ -24,6 +25,7 @@ export class BatchDownloadService {
     private readonly azureBlobStorage: AzureBlobStorageService,
     private readonly walrusQuiltService: WalrusQuiltService,
     private readonly configService: ConfigService<AllConfigType>,
+    private readonly idMasker: IdMaskerService,
   ) {}
 
   async processBatchDownload(
@@ -32,14 +34,16 @@ export class BatchDownloadService {
   ): Promise<BatchDownloadResult> {
     try {
       this.logger.log(
-        `Starting batch download for user ${userId}, batch tracking ${batchTrackingId}`,
+        `Starting batch download for user ${this.idMasker.maskUserId(userId)}, batch tracking ${this.idMasker.maskBatchTrackingId(batchTrackingId)}`,
       );
 
       // 1. Get all submissions for this user
       const submissions = await this.submissionRepository.findByUserId(userId);
 
       if (submissions.length === 0) {
-        this.logger.warn(`No submissions found for user ${userId}`);
+        this.logger.warn(
+          `No submissions found for user ${this.idMasker.maskUserId(userId)}`,
+        );
         await this.resetBatchTracking(userId);
         return {
           userId: userId.toString(),
@@ -51,7 +55,7 @@ export class BatchDownloadService {
       }
 
       this.logger.log(
-        `Found ${submissions.length} submissions for user ${userId}. Starting blob downloads...`,
+        `Found ${submissions.length} submissions for user ${this.idMasker.maskUserId(userId)}. Starting blob downloads...`,
       );
 
       // 2. Download all blobs from Azure Blob Storage
@@ -61,7 +65,7 @@ export class BatchDownloadService {
       for (const submission of submissions) {
         try {
           this.logger.debug(
-            `Downloading blob ${submission.blobName} for submission ${submission.id}`,
+            `Downloading blob ${submission.blobName} for submission ${this.idMasker.maskSubmissionId(submission.id)}`,
           );
 
           // Download blob from Azure
@@ -77,7 +81,7 @@ export class BatchDownloadService {
           // Validate that we got the expected data structure
           if (!submissionData.chats || !Array.isArray(submissionData.chats)) {
             throw new Error(
-              `Invalid submission data: missing or invalid chats array for submission ${submission.id}`,
+              `Invalid submission data: missing or invalid chats array for submission ${this.idMasker.maskSubmissionId(submission.id)}`,
             );
           }
 
@@ -92,11 +96,11 @@ export class BatchDownloadService {
           totalChats += submission.chatCount;
 
           this.logger.debug(
-            `Successfully downloaded submission ${submission.id} with ${submission.chatCount} chats`,
+            `Successfully downloaded submission ${this.idMasker.maskSubmissionId(submission.id)} with ${submission.chatCount} chats`,
           );
         } catch (error) {
           this.logger.error(
-            `Failed to download blob for submission ${submission.id} (${submission.blobName}):`,
+            `Failed to download blob for submission ${this.idMasker.maskSubmissionId(submission.id)} (${submission.blobName}):`,
             error,
           );
           // Continue with other submissions even if one fails
@@ -106,7 +110,7 @@ export class BatchDownloadService {
 
       if (downloadedSubmissions.length === 0) {
         throw new Error(
-          `Failed to download any submissions for user ${userId}. All ${submissions.length} downloads failed.`,
+          `Failed to download any submissions for user ${this.idMasker.maskUserId(userId)}. All ${submissions.length} downloads failed.`,
         );
       }
 
@@ -119,7 +123,7 @@ export class BatchDownloadService {
       };
 
       this.logger.log(
-        `Successfully downloaded ${downloadedSubmissions.length}/${submissions.length} submissions for user ${userId}. Total chats: ${totalChats}`,
+        `Successfully downloaded ${downloadedSubmissions.length}/${submissions.length} submissions for user ${this.idMasker.maskUserId(userId)}. Total chats: ${totalChats}`,
       );
 
       // Write result to local file for inspection
@@ -134,9 +138,14 @@ export class BatchDownloadService {
 
       try {
         // Process quilt: extract patches, write files for inspection, and publish to Walrus
-        await this.walrusQuiltService.processAndPublishQuilt(
-          result,
-          submissionConfig.walrusQuiltEpochs || 1,
+        const blobStoreResult =
+          await this.walrusQuiltService.processAndPublishQuilt(
+            result,
+            submissionConfig.walrusQuiltEpochs || 1,
+          );
+
+        this.logger.log(
+          `Blob store result: ${JSON.stringify(blobStoreResult)}`,
         );
 
         // If we get here, quilt was processed and published successfully
@@ -145,7 +154,7 @@ export class BatchDownloadService {
       } catch (error) {
         // Real error - don't reset batch tracking to allow retry
         this.logger.error(
-          `Failed to process quilt for user ${userId}:`,
+          `Failed to process quilt for user ${this.idMasker.maskUserId(userId)}:`,
           error,
         );
         throw error;
@@ -154,7 +163,7 @@ export class BatchDownloadService {
       return result;
     } catch (error) {
       this.logger.error(
-        `Failed to process batch download for user ${userId}:`,
+        `Failed to process batch download for user ${this.idMasker.maskUserId(userId)}:`,
         error,
       );
 
@@ -180,7 +189,9 @@ export class BatchDownloadService {
         chatCount: 0,
         batchStatus: 'pending',
       });
-      this.logger.log(`Reset batch tracking for user ${userId}`);
+      this.logger.log(
+        `Reset batch tracking for user ${this.idMasker.maskUserId(userId)}`,
+      );
     }
   }
 
@@ -190,18 +201,29 @@ export class BatchDownloadService {
       const outputDir = join(process.cwd(), 'temp', 'batch-downloads');
       await fs.mkdir(outputDir, { recursive: true });
 
-      // Create filename with timestamp and user ID
+      // Create filename with timestamp and masked user ID
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `batch-download-${result.userId}-${timestamp}.json`;
+      const maskedUserId = this.idMasker.maskUserId(result.userId);
+      const filename = `batch-download-${maskedUserId}-${timestamp}.json`;
       const filePath = join(outputDir, filename);
 
       // Convert Date objects to ISO strings for JSON serialization
+      // Mask IDs in the output for privacy
       const serializableResult = {
         ...result,
+        userId: maskedUserId, // Mask user ID in file output
         downloadedAt: result.downloadedAt.toISOString(),
         submissions: result.submissions.map((submission) => ({
           ...submission,
-          data: submission.data,
+          submissionId: this.idMasker.maskSubmissionId(submission.submissionId), // Mask submission ID
+          data: {
+            ...submission.data,
+            user: this.idMasker.maskUserId(submission.data.user), // Mask user ID in data
+            chats: submission.data.chats.map((chat) => ({
+              ...chat,
+              chat_id: this.idMasker.maskChatId(chat.chat_id), // Mask chat ID
+            })),
+          },
         })),
       };
 

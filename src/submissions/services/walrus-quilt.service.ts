@@ -12,6 +12,7 @@ import {
 import { BatchDownloadResult } from '../domain/downloaded-submission';
 import { SubmissionConfig } from '../config/submission-config.type';
 import { AllConfigType } from '../../config/config.type';
+import { IdMaskerService } from '../../utils/id-masker.service';
 
 @Injectable()
 export class WalrusQuiltService {
@@ -20,6 +21,7 @@ export class WalrusQuiltService {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService<AllConfigType>,
+    private readonly idMasker: IdMaskerService,
   ) {}
 
   /**
@@ -32,27 +34,40 @@ export class WalrusQuiltService {
 
     for (const submission of downloadResult.submissions) {
       for (const chat of submission.data.chats) {
-        // Create unique identifier for this patch
-        // Format: {userId}-{submissionId}-{chatId}
-        const identifier = `${downloadResult.userId}-${submission.submissionId}-${chat.chat_id}`;
+        // Mask IDs for Walrus metadata (publicly accessible)
+        const maskedUserId = this.idMasker.reversiblyMaskUserId(
+          downloadResult.userId,
+        );
+        const maskedSubmissionId = this.idMasker.reversiblyMaskSubmissionId(
+          submission.submissionId,
+        );
+        const maskedChatId = this.idMasker.reversiblyMaskChatId(
+          chat.chat_id,
+        );
 
-        // Create chat blob (JSON)
+        // Create unique identifier for this patch using masked IDs
+        // Format: {maskedUserId}-{maskedSubmissionId}-{maskedChatId}
+        const identifier = `${maskedUserId}-${maskedSubmissionId}-${maskedChatId}`;
+
+        // Create chat blob (JSON) - keep original data (not masked)
+        // This will be encrypted later as an extra step
         const chatBlob = JSON.stringify({
-          chat_id: chat.chat_id,
-          contents: chat.contents,
-          submissionId: submission.submissionId,
-          userId: downloadResult.userId,
+          chat_id: chat.chat_id, // Original chat ID
+          contents: chat.contents, // Original contents
+          submissionId: submission.submissionId, // Original submission ID
+          userId: downloadResult.userId, // Original user ID
           revision: submission.data.revision,
           source: submission.data.source,
         });
 
-        // Create metadata with user isolation
+        // Create metadata with masked IDs for user isolation (publicly accessible)
+        // These can be unmasked later for queries
         const metadata: QuiltPatchMetadata = {
           identifier,
           tags: {
-            userId: downloadResult.userId,
-            submissionId: submission.submissionId,
-            chatId: chat.chat_id.toString(),
+            userId: maskedUserId, // Masked for privacy
+            submissionId: maskedSubmissionId, // Masked for privacy
+            chatId: maskedChatId, // Masked for privacy
             revision: submission.data.revision,
             source: submission.data.source,
           },
@@ -229,7 +244,7 @@ export class WalrusQuiltService {
       return result;
     } catch (error) {
       this.logger.error(
-        `Failed to process and publish quilt for user ${downloadResult.userId}:`,
+        `Failed to process and publish quilt for user ${this.idMasker.maskUserId(downloadResult.userId)}:`,
         error,
       );
       throw error;
@@ -248,18 +263,31 @@ export class WalrusQuiltService {
       await fs.mkdir(outputDir, { recursive: true });
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `quilt-patches-${userId}-${timestamp}.json`;
+      const maskedUserId = this.idMasker.maskUserId(userId);
+      const filename = `quilt-patches-${maskedUserId}-${timestamp}.json`;
       const filePath = join(outputDir, filename);
 
+      // Mask IDs in the output file for privacy (but keep real IDs in Walrus metadata)
       const patchesData = patches.map((patch) => ({
-        identifier: patch.identifier,
+        identifier: patch.identifier, // Keep identifier as-is for reference
         contentSize: patch.content.length,
         contentPreview: patch.content.toString('utf8').substring(0, 200),
-        metadata: patch.metadata,
+        metadata: {
+          ...patch.metadata,
+          tags: {
+            ...patch.metadata.tags,
+            // Mask IDs in file output for privacy
+            userId: this.idMasker.maskUserId(patch.metadata.tags.userId),
+            submissionId: this.idMasker.maskSubmissionId(
+              patch.metadata.tags.submissionId,
+            ),
+            chatId: this.idMasker.maskChatId(patch.metadata.tags.chatId),
+          },
+        },
       }));
 
       const output = {
-        userId,
+        userId: maskedUserId, // Mask user ID in file output
         totalPatches: patches.length,
         extractedAt: new Date().toISOString(),
         patches: patchesData,
@@ -294,18 +322,39 @@ export class WalrusQuiltService {
       const filePath = join(outputDir, filename);
 
       // Extract form data information
+      // Mask IDs in file output for privacy (but keep real IDs in actual Walrus request)
       const requestData = {
         url: `${publisherUrl}/v1/quilts?epochs=${epochs}`,
         method: 'PUT',
         epochs,
         totalPatches: patches.length,
         headers: formData.getHeaders(),
-        metadata: metadataArray,
+        metadata: metadataArray.map((meta) => ({
+          identifier: meta.identifier,
+          tags: {
+            ...meta.tags,
+            // Mask IDs in file output for privacy
+            userId: this.idMasker.maskUserId(meta.tags.userId),
+            submissionId: this.idMasker.maskSubmissionId(meta.tags.submissionId),
+            chatId: this.idMasker.maskChatId(meta.tags.chatId),
+          },
+        })),
         patches: patches.map((patch) => ({
           identifier: patch.identifier,
           contentSize: patch.content.length,
           contentPreview: patch.content.toString('utf8').substring(0, 500),
-          metadata: patch.metadata,
+          metadata: {
+            ...patch.metadata,
+            tags: {
+              ...patch.metadata.tags,
+              // Mask IDs in file output for privacy
+              userId: this.idMasker.maskUserId(patch.metadata.tags.userId),
+              submissionId: this.idMasker.maskSubmissionId(
+                patch.metadata.tags.submissionId,
+              ),
+              chatId: this.idMasker.maskChatId(patch.metadata.tags.chatId),
+            },
+          },
         })),
         requestInfo: {
           contentType: formData.getHeaders()['content-type'],

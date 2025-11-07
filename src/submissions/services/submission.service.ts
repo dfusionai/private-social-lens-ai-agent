@@ -10,6 +10,7 @@ import { SubmissionConfig } from '../config/submission-config.type';
 import { AllConfigType } from '../../config/config.type';
 import { PgBossQueueService } from '../../jobs/services/pg-boss-queue.service';
 import { JobType } from '../../jobs/enums/job-type.enum';
+import { IdMaskerService } from '../../utils/id-masker.service';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -22,6 +23,7 @@ export class SubmissionService {
     private readonly azureBlobStorage: AzureBlobStorageService,
     private readonly pgBossQueue: PgBossQueueService,
     private readonly configService: ConfigService<AllConfigType>,
+    private readonly idMasker: IdMaskerService,
   ) {}
 
   async createSubmission(
@@ -119,7 +121,7 @@ export class SubmissionService {
         });
 
       this.logger.log(
-        `Created submission ${submission.id} for user ${userId}. Total chats: ${newChatCount}`,
+        `Created submission ${this.idMasker.maskSubmissionId(submission.id)} for user ${this.idMasker.maskUserId(userId)}. Total chats: ${newChatCount}`,
       );
 
       // 7. Check if threshold reached and trigger batch processing
@@ -172,7 +174,7 @@ export class SubmissionService {
       });
 
       this.logger.log(
-        `Triggered batch processing for user ${userId} with ${batchTracking.chatCount} chats`,
+        `Triggered batch processing for user ${this.idMasker.maskUserId(userId)} with ${batchTracking.chatCount} chats`,
       );
     } catch (error) {
       this.logger.error('Failed to trigger batch processing:', error);
@@ -201,7 +203,9 @@ export class SubmissionService {
         chatCount: 0,
         batchStatus: 'pending',
       });
-      this.logger.log(`Reset batch tracking for user ${userId}`);
+      this.logger.log(
+        `Reset batch tracking for user ${this.idMasker.maskUserId(userId)}`,
+      );
     }
   }
 }
