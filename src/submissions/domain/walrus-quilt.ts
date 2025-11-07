@@ -4,8 +4,6 @@ export interface QuiltPatchMetadata {
     userId: string;
     submissionId: string;
     chatId: string;
-    revision?: string;
-    source?: string;
   };
 }
 

@@ -40,8 +40,11 @@ export class WalrusQuiltService {
         const maskedChatId = this.idMasker.reversiblyMaskChatId(chat.chat_id);
 
         // Create unique identifier for this patch using masked IDs
-        // Format: {maskedUserId}-{maskedSubmissionId}-{maskedChatId}
-        const identifier = `${maskedUserId}-${maskedSubmissionId}-${maskedChatId}`;
+        // Format: p-{maskedSubmissionId}-{maskedChatId}
+        // Prefix with 'p-' to ensure it starts with an alphanumeric character
+        // (base64 strings can start with +, /, = which are not alphanumeric)
+        // Tags already contain userId, so we don't need it in the identifier
+        const identifier = `p-${maskedSubmissionId}-${maskedChatId}`;
 
         // Create chat blob (JSON) - keep original data (not masked)
         // This will be encrypted later as an extra step
@@ -56,15 +59,16 @@ export class WalrusQuiltService {
 
         // Create metadata with masked IDs for user isolation (publicly accessible)
         // These can be unmasked later for queries
+        // Only include essential fields (userId, submissionId, chatId) in tags
+        const tags = {
+          userId: maskedUserId,
+          submissionId: maskedSubmissionId,
+          chatId: maskedChatId,
+        };
+
         const metadata: QuiltPatchMetadata = {
           identifier,
-          tags: {
-            userId: maskedUserId, // Masked for privacy
-            submissionId: maskedSubmissionId, // Masked for privacy
-            chatId: maskedChatId, // Masked for privacy
-            revision: submission.data.revision,
-            source: submission.data.source,
-          },
+          tags,
         };
 
         patches.push({
