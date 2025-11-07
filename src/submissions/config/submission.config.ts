@@ -21,14 +21,16 @@ class EnvironmentVariablesValidator {
   @Min(1)
   BATCH_CHAT_MAX_THRESHOLD: number;
 
-  @IsOptional()
   @IsString()
-  WALRUS_PUBLISHER_URL?: string;
+  WALRUS_PUBLISHER_URL: string;
 
   @IsOptional()
   @IsNumber()
   @Min(1)
   WALRUS_QUILT_EPOCHS?: number;
+
+  @IsString()
+  POLICY_OBJECT_ID: string;
 }
 
 export default registerAs<SubmissionConfig>('submission', () => {
@@ -44,9 +46,10 @@ export default registerAs<SubmissionConfig>('submission', () => {
       process.env.BATCH_CHAT_MAX_THRESHOLD || '600',
       10,
     ),
-    walrusPublisherUrl: process.env.WALRUS_PUBLISHER_URL,
+    walrusPublisherUrl: process.env.WALRUS_PUBLISHER_URL || '',
     walrusQuiltEpochs: process.env.WALRUS_QUILT_EPOCHS
       ? parseInt(process.env.WALRUS_QUILT_EPOCHS, 10)
       : 1,
+    policyObjectId: process.env.POLICY_OBJECT_ID || '',
   };
 });

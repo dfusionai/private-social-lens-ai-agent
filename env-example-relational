@@ -140,12 +140,21 @@ JOB_RETRY_DELAY=60000
 TEE_PROCESS_TIMEOUT=480000 #8 minutes
 WORKER_INSTANCE_ID=worker-local-1
 
-DFUSION_VALIDATOR_API_KEY=your-dfusion-validator-api-key-here
+DFUSION_VALIDATOR_API_KEY=MHE7pzguKcjcyPXBUKAQuhLCoDqssknmWMiXgNLmDMM=
 
 AZURE_STORAGE_ACCOUNT_NAME=
 AZURE_STORAGE_ACCOUNT_KEY=
 AZURE_STORAGE_CONTAINER_NAME=
+
 BATCH_CHAT_THRESHOLD=500
 BATCH_CHAT_MAX_THRESHOLD=600
+
 WALRUS_PUBLISHER_URL=
 WALRUS_QUILT_EPOCHS=
+
+POLICY_OBJECT_ID=your-policy-id-here
+
+# ID Masking (for privacy in logs and files)
+# Set a secret salt for deterministic ID masking
+# Same input always produces same masked output
+ID_MASK_SALT=change-this-to-a-secret-salt-in-production

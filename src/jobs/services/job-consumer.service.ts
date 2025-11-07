@@ -86,7 +86,7 @@ export class JobConsumerService {
           const downloadResult =
             await this.batchDownloadService.processBatchDownload(
               userId.toString(),
-              metadata?.batchTrackingId,
+              metadata?.batchId,
             );
 
           // Batch download jobs are not tracked in the job table, so skip status update

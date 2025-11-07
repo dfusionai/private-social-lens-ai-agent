@@ -99,16 +99,10 @@ export class WalrusQuiltService {
     epochs: number = 1,
   ): Promise<QuiltPublishResult> {
     try {
-      const submissionConfig = this.configService.get<SubmissionConfig>(
+      const submissionConfig = this.configService.getOrThrow<SubmissionConfig>(
         'submission',
         { infer: true },
       );
-
-      if (!submissionConfig.walrusPublisherUrl) {
-        throw new Error(
-          'Walrus publisher URL not configured. Please set WALRUS_PUBLISHER_URL environment variable.',
-        );
-      }
 
       if (patches.length === 0) {
         throw new Error('Cannot publish empty quilt');
@@ -171,21 +165,35 @@ export class WalrusQuiltService {
 
       // Parse response
       const responseData = response.data;
-      const quiltId =
-        responseData.blobStoreResult?.newlyCreated?.blobObject?.blobId ||
+      
+      // Extract on-chain blob object ID from newlyCreated
+      const onChainBlobObjectId =
+        responseData.blobStoreResult?.newlyCreated?.blobObject?.id;
+
+      // Extract quilt blob ID from newlyCreated
+      const quiltBlobId =
+        responseData.blobStoreResult?.newlyCreated?.blobObject?.blobId;
+
+      // Handle alreadyCertified case (if quilt was already stored)
+      const alreadyCertifiedBlobId =
         responseData.blobStoreResult?.alreadyCertified?.blobId;
 
-      if (!quiltId) {
+      if (!quiltBlobId && !alreadyCertifiedBlobId) {
         throw new Error(
-          'Invalid response from Walrus publisher: missing quilt ID',
+          'Invalid response from Walrus publisher: missing quilt blob ID',
         );
       }
+
+      // Use alreadyCertified blobId if newlyCreated is not available
+      const finalQuiltBlobId = quiltBlobId || alreadyCertifiedBlobId;
+      // For alreadyCertified, we don't have the on-chain ID, so use blobId as fallback
+      const finalOnChainId = onChainBlobObjectId || finalQuiltBlobId;
 
       // Map stored quilt blobs to our result format
       const storedBlobs = responseData.storedQuiltBlobs || [];
       const result: QuiltPublishResult = {
-        quiltId,
-        quiltBlobId: quiltId,
+        quiltId: finalOnChainId, // On-chain blob object ID (or blobId if alreadyCertified)
+        quiltBlobId: finalQuiltBlobId, // Quilt blob ID
         patches: storedBlobs.map((storedBlob: any) => {
           // Find the original patch to get userId, submissionId, chatId
           const originalPatch = patches.find(
@@ -205,7 +213,7 @@ export class WalrusQuiltService {
       };
 
       this.logger.log(
-        `Quilt published successfully. Quilt ID: ${quiltId}, Patches: ${result.totalPatches}`,
+        `Quilt published successfully. On-chain ID: ${result.quiltId}, Blob ID: ${result.quiltBlobId}, Patches: ${result.totalPatches}`,
       );
 
       return result;

@@ -4,6 +4,7 @@ export type SubmissionConfig = {
   azureStorageContainerName: string;
   batchChatThreshold: number;
   batchChatMaxThreshold: number;
-  walrusPublisherUrl?: string;
+  walrusPublisherUrl: string;
   walrusQuiltEpochs?: number;
+  policyObjectId: string;
 };

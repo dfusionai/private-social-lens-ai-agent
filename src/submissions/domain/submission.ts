@@ -30,6 +30,9 @@ export class Submission {
   chatCount: number;
 
   @Expose()
+  batchId?: string;
+
+  @Expose()
   createdAt: Date;
 
   @Expose()

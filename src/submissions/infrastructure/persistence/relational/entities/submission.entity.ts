@@ -6,13 +6,17 @@ import {
   Column,
   DeleteDateColumn,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { EntityRelationalHelper } from '../../../../../utils/relational-entity-helper';
+import { BatchEntity } from './batch.entity';
 
 @Entity({
   name: 'submission',
 })
 @Index(['userId', 'createdAt'])
+@Index(['batchId'])
 export class SubmissionEntity extends EntityRelationalHelper {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -44,6 +48,16 @@ export class SubmissionEntity extends EntityRelationalHelper {
     default: 0,
   })
   chatCount: number;
+
+  @ManyToOne(() => BatchEntity, { nullable: true })
+  @JoinColumn({ name: 'batchId' })
+  batch?: BatchEntity;
+
+  @Column({
+    type: 'uuid',
+    nullable: true,
+  })
+  batchId?: string;
 
   @CreateDateColumn()
   createdAt: Date;

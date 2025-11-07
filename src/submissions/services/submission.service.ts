@@ -1,11 +1,11 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SubmissionRepository } from '../infrastructure/persistence/submission.repository';
-import { UserBatchTrackingRepository } from '../infrastructure/persistence/user-batch-tracking.repository';
+import { BatchRepository } from '../infrastructure/persistence/batch.repository';
 import { AzureBlobStorageService } from './azure-blob-storage.service';
 import { CreateSubmissionDto } from '../dto/create-submission.dto';
 import { Submission } from '../domain/submission';
-import { UserBatchTracking } from '../domain/user-batch-tracking';
+import { Batch } from '../domain/batch';
 import { SubmissionConfig } from '../config/submission-config.type';
 import { AllConfigType } from '../../config/config.type';
 import { PgBossQueueService } from '../../jobs/services/pg-boss-queue.service';
@@ -19,7 +19,7 @@ export class SubmissionService {
 
   constructor(
     private readonly submissionRepository: SubmissionRepository,
-    private readonly userBatchTrackingRepository: UserBatchTrackingRepository,
+    private readonly batchRepository: BatchRepository,
     private readonly azureBlobStorage: AzureBlobStorageService,
     private readonly pgBossQueue: PgBossQueueService,
     private readonly configService: ConfigService<AllConfigType>,
@@ -28,30 +28,19 @@ export class SubmissionService {
 
   async createSubmission(
     createSubmissionDto: CreateSubmissionDto,
+    userId: string,
   ): Promise<{ submissionId: string; chatCount: number }> {
     try {
-      // 1. Use the user string from the submission data
-      const userId = createSubmissionDto.user;
+      // 1. Use the userId from authenticated user (telegram ID)
 
       // 2. Calculate total chat count for this submission
       const submissionChatCount = createSubmissionDto.chats.length;
 
-      // 3. Get or create user batch tracking
-      let batchTracking =
-        await this.userBatchTrackingRepository.findByUserId(userId);
-
-      if (!batchTracking) {
-        batchTracking = await this.userBatchTrackingRepository.create(
-          new UserBatchTracking({
-            userId: userId,
-            chatCount: 0,
-            batchStatus: 'pending',
-          }),
-        );
-      }
+      // 3. Get or create batch for this submission
+      const batch = await this.findOrCreateBatch(userId, submissionChatCount);
 
       // 4. Check if batch is already processing
-      if (batchTracking.batchStatus === 'processing') {
+      if (batch.batchStatus === 'processing') {
         throw new BadRequestException(
           'Batch is currently being processed. Please wait for completion.',
         );
@@ -62,7 +51,7 @@ export class SubmissionService {
       const submissionData = {
         revision: createSubmissionDto.revision,
         source: createSubmissionDto.source,
-        user: createSubmissionDto.user,
+        user: userId, // Use authenticated user's socialId (telegram ID)
         submission_token: createSubmissionDto.submission_token,
         chats: createSubmissionDto.chats,
       };
@@ -110,18 +99,18 @@ export class SubmissionService {
           blobUrl,
           blobName,
           chatCount: submissionChatCount,
+          batchId: batch.id,
         }),
       );
 
-      // 6. Update user batch tracking
-      const newChatCount = batchTracking.chatCount + submissionChatCount;
-      const updatedBatchTracking =
-        await this.userBatchTrackingRepository.update(batchTracking.id, {
-          chatCount: newChatCount,
-        });
+      // 6. Update batch chat count
+      const newChatCount = batch.chatCount + submissionChatCount;
+      const updatedBatch = await this.batchRepository.update(batch.id, {
+        chatCount: newChatCount,
+      });
 
       this.logger.log(
-        `Created submission ${this.idMasker.maskSubmissionId(submission.id)} for user ${this.idMasker.maskUserId(userId)}. Total chats: ${newChatCount}`,
+        `Created submission ${this.idMasker.maskSubmissionId(submission.id)} for user ${this.idMasker.maskUserId(userId)} in batch ${batch.batchNumber}. Batch chats: ${newChatCount}`,
       );
 
       // 7. Check if threshold reached and trigger batch processing
@@ -131,11 +120,11 @@ export class SubmissionService {
       );
 
       if (
-        updatedBatchTracking &&
+        updatedBatch &&
         newChatCount >= submissionConfig.batchChatThreshold &&
         newChatCount <= submissionConfig.batchChatMaxThreshold
       ) {
-        await this.triggerBatchProcessing(userId, updatedBatchTracking);
+        await this.triggerBatchProcessing(userId, updatedBatch.id);
       }
 
       return {
@@ -148,13 +137,67 @@ export class SubmissionService {
     }
   }
 
+  /**
+   * Find or create a batch for a submission.
+   * Creates a new batch if:
+   * - No batch exists for the user
+   * - Latest batch is 'failed'
+   * - Latest batch is 'processing' (can't add to it)
+   * - Adding to latest batch would exceed max threshold
+   */
+  private async findOrCreateBatch(
+    userId: string,
+    submissionChatCount: number,
+  ): Promise<Batch> {
+    const submissionConfig = this.configService.get<SubmissionConfig>(
+      'submission',
+      { infer: true },
+    );
+
+    // Find latest batch for user
+    const latestBatch = await this.batchRepository.findLatestByUserId(userId);
+
+    // Determine if we need a new batch
+    const needsNewBatch =
+      !latestBatch ||
+      latestBatch.batchStatus === 'failed' ||
+      latestBatch.batchStatus === 'processing' ||
+      (latestBatch.chatCount + submissionChatCount) >
+        submissionConfig.batchChatMaxThreshold;
+
+    if (needsNewBatch) {
+      // Create new batch with chatCount: 0
+      // The chat count will be added when we update the batch after creating the submission
+      const batchNumber = latestBatch ? latestBatch.batchNumber + 1 : 1;
+      const newBatch = await this.batchRepository.create(
+        new Batch({
+          userId: userId,
+          batchNumber: batchNumber,
+          chatCount: 0, // Start with 0, will be updated after submission is created
+          batchStatus: 'pending',
+          retryCount: 0,
+          maxRetries: 3,
+        }),
+      );
+
+      this.logger.log(
+        `Created new batch ${batchNumber} for user ${this.idMasker.maskUserId(userId)}`,
+      );
+
+      return newBatch;
+    }
+
+    // Use existing batch
+    return latestBatch;
+  }
+
   private async triggerBatchProcessing(
     userId: string,
-    batchTracking: UserBatchTracking,
+    batchId: string,
   ): Promise<void> {
     try {
       // Update batch status to processing
-      await this.userBatchTrackingRepository.update(batchTracking.id, {
+      await this.batchRepository.update(batchId, {
         batchStatus: 'processing',
       });
 
@@ -168,18 +211,18 @@ export class SubmissionService {
         priority: 5,
         metadata: {
           userId: userId.toString(),
-          batchTrackingId: batchTracking.id,
-          chatCount: batchTracking.chatCount,
+          batchId: batchId,
         },
       });
 
+      const batch = await this.batchRepository.findById(batchId);
       this.logger.log(
-        `Triggered batch processing for user ${this.idMasker.maskUserId(userId)} with ${batchTracking.chatCount} chats`,
+        `Triggered batch processing for user ${this.idMasker.maskUserId(userId)}, batch ${batch?.batchNumber} with ${batch?.chatCount} chats`,
       );
     } catch (error) {
       this.logger.error('Failed to trigger batch processing:', error);
       // Reset batch status on error
-      await this.userBatchTrackingRepository.update(batchTracking.id, {
+      await this.batchRepository.update(batchId, {
         batchStatus: 'pending',
       });
       throw error;
@@ -190,22 +233,7 @@ export class SubmissionService {
     return await this.submissionRepository.findByUserId(userId);
   }
 
-  async getBatchTracking(userId: string): Promise<UserBatchTracking | null> {
-    return await this.userBatchTrackingRepository.findByUserId(userId);
-  }
-
-  async resetBatchTracking(userId: string): Promise<void> {
-    const batchTracking =
-      await this.userBatchTrackingRepository.findByUserId(userId);
-
-    if (batchTracking) {
-      await this.userBatchTrackingRepository.update(batchTracking.id, {
-        chatCount: 0,
-        batchStatus: 'pending',
-      });
-      this.logger.log(
-        `Reset batch tracking for user ${this.idMasker.maskUserId(userId)}`,
-      );
-    }
+  async getUserBatches(userId: string): Promise<Batch[]> {
+    return await this.batchRepository.findByUserId(userId);
   }
 }

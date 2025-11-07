@@ -3,13 +3,13 @@ import { SubmissionRepository } from '../submission.repository';
 import { SubmissionRelationalRepository } from './repositories/submission.repository';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SubmissionEntity } from './entities/submission.entity';
-import { UserBatchTrackingRepository } from '../user-batch-tracking.repository';
-import { UserBatchTrackingRelationalRepository } from './repositories/user-batch-tracking.repository';
-import { UserBatchTrackingEntity } from './entities/user-batch-tracking.entity';
+import { BatchRepository } from '../batch.repository';
+import { BatchRelationalRepository } from './repositories/batch.repository';
+import { BatchEntity } from './entities/batch.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SubmissionEntity, UserBatchTrackingEntity]),
+    TypeOrmModule.forFeature([SubmissionEntity, BatchEntity]),
   ],
   providers: [
     {
@@ -17,10 +17,10 @@ import { UserBatchTrackingEntity } from './entities/user-batch-tracking.entity';
       useClass: SubmissionRelationalRepository,
     },
     {
-      provide: UserBatchTrackingRepository,
-      useClass: UserBatchTrackingRelationalRepository,
+      provide: BatchRepository,
+      useClass: BatchRelationalRepository,
     },
   ],
-  exports: [SubmissionRepository, UserBatchTrackingRepository],
+  exports: [SubmissionRepository, BatchRepository],
 })
 export class RelationalSubmissionPersistenceModule {}

@@ -9,6 +9,7 @@ export class SubmissionMapper {
       blobUrl: raw.blobUrl,
       blobName: raw.blobName,
       chatCount: raw.chatCount,
+      batchId: raw.batchId,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
       deletedAt: raw.deletedAt,
@@ -28,6 +29,7 @@ export class SubmissionMapper {
     persistenceEntity.blobUrl = domainEntity.blobUrl;
     persistenceEntity.blobName = domainEntity.blobName;
     persistenceEntity.chatCount = domainEntity.chatCount;
+    persistenceEntity.batchId = domainEntity.batchId;
     persistenceEntity.createdAt = domainEntity.createdAt;
     persistenceEntity.updatedAt = domainEntity.updatedAt;
 

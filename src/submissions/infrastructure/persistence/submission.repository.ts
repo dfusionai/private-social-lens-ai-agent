@@ -11,6 +11,8 @@ export abstract class SubmissionRepository {
 
   abstract findByUserId(userId: number | string): Promise<Submission[]>;
 
+  abstract findByBatchId(batchId: string): Promise<Submission[]>;
+
   abstract findByUserAndBatchStatus(
     userId: number | string,
     batchStatus: string,

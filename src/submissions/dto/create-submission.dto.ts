@@ -36,7 +36,10 @@ export class CreateSubmissionDto {
   @IsNotEmpty()
   source: string;
 
-  @ApiProperty({ description: 'User identifier', example: '5619346142' })
+  @ApiProperty({
+    description: 'User identifier (telegram ID)',
+    example: '5619346142',
+  })
   @IsString()
   @IsNotEmpty()
   user: string;

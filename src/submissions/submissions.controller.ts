@@ -3,27 +3,42 @@ import {
   Post,
   Get,
   Body,
-  Query,
   HttpCode,
   HttpStatus,
+  Request,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
 import { SubmissionService } from './services/submission.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
+import { UsersService } from '../users/users.service';
+import { JwtPayloadType } from '../auth/strategies/types/jwt-payload.type';
+import { UnauthorizedException, BadRequestException } from '@nestjs/common';
 
 @ApiTags('Submissions')
+@ApiBearerAuth()
+@UseGuards(AuthGuard('jwt'))
 @Controller({
   path: 'submissions',
   version: '1',
 })
 export class SubmissionsController {
-  constructor(private readonly submissionService: SubmissionService) {}
+  constructor(
+    private readonly submissionService: SubmissionService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Post()
   @ApiOperation({
     summary: 'Create a new submission',
     description:
-      'Submit chats data which will be stored temporarily in Azure Blob Storage until batch threshold is reached. The user ID is taken from the submission data.',
+      "Submit chats data which will be stored temporarily in Azure Blob Storage until batch threshold is reached. The user ID in the payload must match the authenticated user's telegram ID.",
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -47,65 +62,146 @@ export class SubmissionsController {
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Invalid input data or batch is being processed',
+    description:
+      'Invalid input data, batch is being processed, or user ID in submission does not match authenticated user',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'User not authenticated or user not found',
   })
   @HttpCode(HttpStatus.CREATED)
   async createSubmission(
+    @Request() request: { user: JwtPayloadType },
     @Body() createSubmissionDto: CreateSubmissionDto,
   ): Promise<{ submissionId: string; chatCount: number }> {
-    return await this.submissionService.createSubmission(createSubmissionDto);
+    // Fetch the full user object to get the socialId (telegram ID)
+    const user = await this.usersService.findById(request.user.id);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    if (!user.socialId) {
+      throw new UnauthorizedException('User does not have a social ID');
+    }
+
+    // Validate that the user ID from the DTO matches the authenticated user's socialId
+    if (createSubmissionDto.user !== user.socialId) {
+      throw new BadRequestException(
+        'User ID in submission does not match authenticated user',
+      );
+    }
+
+    return await this.submissionService.createSubmission(
+      createSubmissionDto,
+      user.socialId,
+    );
   }
 
   @Get('batch-status')
   @ApiOperation({
-    summary: 'Get batch tracking status',
-    description: 'Retrieve the current batch tracking status for a user',
-  })
-  @ApiQuery({
-    name: 'userId',
-    required: true,
-    type: String,
-    description: 'User ID from the submission data',
-    example: '5619346142',
+    summary: 'Get batch status',
+    description:
+      'Retrieve the current batch status for the authenticated user, including all batches',
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Batch tracking status retrieved successfully',
+    description: 'Batch status retrieved successfully',
     schema: {
       type: 'object',
       properties: {
-        chatCount: {
-          type: 'number',
-          example: 450,
+        batches: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              batchNumber: { type: 'number', example: 1 },
+              chatCount: { type: 'number', example: 450 },
+              batchStatus: {
+                type: 'string',
+                enum: ['pending', 'processing', 'completed', 'failed'],
+                example: 'pending',
+              },
+              retryCount: { type: 'number', example: 0 },
+              maxRetries: { type: 'number', example: 3 },
+              errorMessage: { type: 'string', nullable: true },
+              quiltId: { type: 'string', nullable: true },
+              createdAt: { type: 'string', format: 'date-time' },
+            },
+          },
         },
-        batchStatus: {
-          type: 'string',
-          enum: ['pending', 'processing', 'completed'],
-          example: 'pending',
+        latestBatch: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            batchNumber: { type: 'number', example: 1 },
+            chatCount: { type: 'number', example: 450 },
+            batchStatus: {
+              type: 'string',
+              enum: ['pending', 'processing', 'completed', 'failed'],
+              example: 'pending',
+            },
+            retryCount: { type: 'number', example: 0 },
+            maxRetries: { type: 'number', example: 3 },
+            errorMessage: { type: 'string', nullable: true },
+            quiltId: { type: 'string', nullable: true },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
         },
       },
     },
   })
-  async getBatchStatus(@Query('userId') userId: string) {
-    if (!userId) {
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'User not authenticated or user not found',
+  })
+  async getBatchStatus(@Request() request: { user: JwtPayloadType }) {
+    // Fetch the full user object to get the socialId (telegram ID)
+    const user = await this.usersService.findById(request.user.id);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    if (!user.socialId) {
+      throw new UnauthorizedException('User does not have a social ID');
+    }
+
+    const batches = await this.submissionService.getUserBatches(user.socialId);
+
+    if (!batches || batches.length === 0) {
       return {
-        chatCount: 0,
-        batchStatus: 'pending',
+        batches: [],
+        latestBatch: null,
       };
     }
 
-    const batchTracking = await this.submissionService.getBatchTracking(userId);
-
-    if (!batchTracking) {
-      return {
-        chatCount: 0,
-        batchStatus: 'pending',
-      };
-    }
+    // Latest batch is the first one (ordered by batchNumber DESC)
+    const latestBatch = batches[0];
 
     return {
-      chatCount: batchTracking.chatCount,
-      batchStatus: batchTracking.batchStatus,
+      batches: batches.map((batch) => ({
+        id: batch.id,
+        batchNumber: batch.batchNumber,
+        chatCount: batch.chatCount,
+        batchStatus: batch.batchStatus,
+        retryCount: batch.retryCount,
+        maxRetries: batch.maxRetries,
+        errorMessage: batch.errorMessage,
+        quiltId: batch.quiltId,
+        createdAt: batch.createdAt,
+      })),
+      latestBatch: latestBatch
+        ? {
+            id: latestBatch.id,
+            batchNumber: latestBatch.batchNumber,
+            chatCount: latestBatch.chatCount,
+            batchStatus: latestBatch.batchStatus,
+            retryCount: latestBatch.retryCount,
+            maxRetries: latestBatch.maxRetries,
+            errorMessage: latestBatch.errorMessage,
+            quiltId: latestBatch.quiltId,
+            createdAt: latestBatch.createdAt,
+          }
+        : null,
     };
   }
 }

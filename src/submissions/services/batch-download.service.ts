@@ -1,8 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { SubmissionRepository } from '../infrastructure/persistence/submission.repository';
-import { UserBatchTrackingRepository } from '../infrastructure/persistence/user-batch-tracking.repository';
+import { BatchRepository } from '../infrastructure/persistence/batch.repository';
 import { AzureBlobStorageService } from './azure-blob-storage.service';
 import { WalrusQuiltService } from './walrus-quilt.service';
 import {
@@ -14,6 +14,10 @@ import { ConfigService } from '@nestjs/config';
 import { SubmissionConfig } from '../config/submission-config.type';
 import { AllConfigType } from '../../config/config.type';
 import { IdMaskerService } from '../../utils/id-masker.service';
+import { JobProducerService } from '../../jobs/services/job-producer.service';
+import { JobType } from '../../jobs/enums/job-type.enum';
+import { UsersService } from '../../users/users.service';
+import { AuthProvidersEnum } from '../../auth/auth-providers.enum';
 
 @Injectable()
 export class BatchDownloadService {
@@ -21,33 +25,56 @@ export class BatchDownloadService {
 
   constructor(
     private readonly submissionRepository: SubmissionRepository,
-    private readonly userBatchTrackingRepository: UserBatchTrackingRepository,
+    private readonly batchRepository: BatchRepository,
     private readonly azureBlobStorage: AzureBlobStorageService,
     private readonly walrusQuiltService: WalrusQuiltService,
     private readonly configService: ConfigService<AllConfigType>,
     private readonly idMasker: IdMaskerService,
+    @Inject(forwardRef(() => JobProducerService))
+    private readonly jobProducerService: JobProducerService,
+    private readonly usersService: UsersService,
   ) {}
 
   async processBatchDownload(
     userId: string,
-    batchTrackingId: string,
+    batchId: string,
   ): Promise<BatchDownloadResult> {
     try {
       this.logger.log(
-        `Starting batch download for user ${this.idMasker.maskUserId(userId)}, batch tracking ${this.idMasker.maskBatchTrackingId(batchTrackingId)}`,
+        `Starting batch download for user ${this.idMasker.maskUserId(userId)}, batch ${batchId}`,
       );
 
-      // 1. Get all submissions for this user
-      const submissions = await this.submissionRepository.findByUserId(userId);
+      // 1. Get batch to verify it exists
+      const batch = await this.batchRepository.findById(batchId);
+      if (!batch) {
+        throw new Error(`Batch ${batchId} not found`);
+      }
+
+      // 1.5. Check if batch is already failed - don't process failed batches
+      if (batch.batchStatus === 'failed') {
+        this.logger.warn(
+          `Batch ${batchId} is already failed (retry ${batch.retryCount}/${batch.maxRetries}). Skipping processing.`,
+        );
+        throw new Error(
+          `Batch ${batchId} is already failed and cannot be processed again`,
+        );
+      }
+
+      // 2. Get all submissions for this specific batch
+      const submissions =
+        await this.submissionRepository.findByBatchId(batchId);
 
       if (submissions.length === 0) {
         this.logger.warn(
-          `No submissions found for user ${this.idMasker.maskUserId(userId)}`,
+          `No submissions found for batch ${batchId} (user ${this.idMasker.maskUserId(userId)})`,
         );
-        await this.resetBatchTracking(userId);
+        // Update batch status to completed (empty batch)
+        await this.batchRepository.update(batchId, {
+          batchStatus: 'completed',
+        });
         return {
           userId: userId.toString(),
-          batchTrackingId,
+          batchTrackingId: batchId,
           submissions: [],
           totalChats: 0,
           downloadedAt: new Date(),
@@ -116,7 +143,7 @@ export class BatchDownloadService {
 
       const result: BatchDownloadResult = {
         userId: userId.toString(),
-        batchTrackingId,
+        batchTrackingId: batchId,
         submissions: downloadedSubmissions,
         totalChats,
         downloadedAt: new Date(),
@@ -152,14 +179,45 @@ export class BatchDownloadService {
         // Clean up: mark submissions as deleted and remove Azure blobs
         await this.cleanupProcessedSubmissions(downloadedSubmissions);
 
-        // Reset batch tracking after successful quilt processing
-        await this.resetBatchTracking(userId);
+        // Update batch status to completed and store quilt info
+        const updatedBatch = await this.batchRepository.update(batchId, {
+          batchStatus: 'completed',
+          quiltId: blobStoreResult?.quiltId,
+          quiltBlobId: blobStoreResult?.quiltBlobId,
+        });
+
+        // Create Nautilus job to process the quilt
+        if (
+          updatedBatch &&
+          blobStoreResult?.quiltId &&
+          blobStoreResult?.quiltBlobId
+        ) {
+          await this.createNautilusJob(
+            userId,
+            blobStoreResult.quiltId,
+            blobStoreResult.quiltBlobId,
+          );
+        }
       } catch (error) {
-        // Real error - don't reset batch tracking to allow retry
-        this.logger.error(
-          `Failed to process quilt for user ${this.idMasker.maskUserId(userId)}:`,
-          error,
-        );
+        // Real error - update batch retry count and status
+        const batch = await this.batchRepository.findById(batchId);
+        if (batch) {
+          const newRetryCount = batch.retryCount + 1;
+          const newStatus =
+            newRetryCount >= batch.maxRetries ? 'failed' : 'pending';
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+
+          await this.batchRepository.update(batchId, {
+            batchStatus: newStatus,
+            retryCount: newRetryCount,
+            errorMessage: errorMessage,
+          });
+
+          this.logger.error(
+            `Batch ${batchId} failed (retry ${newRetryCount}/${batch.maxRetries}). Status: ${newStatus}`,
+          );
+        }
         throw error;
       }
 
@@ -170,30 +228,60 @@ export class BatchDownloadService {
         error,
       );
 
-      // Reset batch status to pending on error so it can be retried
-      const batchTracking =
-        await this.userBatchTrackingRepository.findByUserId(userId);
-      if (batchTracking) {
-        await this.userBatchTrackingRepository.update(batchTracking.id, {
-          batchStatus: 'pending',
-        });
-      }
-
       throw error;
     }
   }
 
-  async resetBatchTracking(userId: string): Promise<void> {
-    const batchTracking =
-      await this.userBatchTrackingRepository.findByUserId(userId);
+  /**
+   * Create a Nautilus job to process the quilt after successful upload
+   */
+  private async createNautilusJob(
+    userId: string,
+    onChainBlobObjectId: string,
+    quiltBlobId: string,
+  ): Promise<void> {
+    try {
+      const submissionConfig = this.configService.getOrThrow<SubmissionConfig>(
+        'submission',
+        { infer: true },
+      );
 
-    if (batchTracking) {
-      await this.userBatchTrackingRepository.update(batchTracking.id, {
-        chatCount: 0,
-        batchStatus: 'pending',
+      // Look up user by socialId (submission userId maps to user.socialId)
+      // Try common providers - adjust based on your submission system
+      const user = await this.usersService.findBySocialIdAndProvider({
+        socialId: userId,
+        provider: AuthProvidersEnum.telegram,
       });
+
+      // If not found with telegram, try other providers or fallback
+      if (!user) {
+        // Try other common providers if needed
+        // For now, we'll log a warning and skip job creation
+        this.logger.warn(
+          `User with socialId ${this.idMasker.maskUserId(userId)} not found in user table. Skipping Nautilus job creation.`,
+        );
+        return;
+      }
+
+      const jobId = await this.jobProducerService.createDataRefinementJob(
+        user.id, // Use the integer user ID from the user table
+        {
+          blobId: quiltBlobId, // Quilt blob ID for retrieving from Walrus
+          onchainFileId: onChainBlobObjectId, // On-chain blob object ID
+          policyId: submissionConfig.policyObjectId,
+          jobType: JobType.BOTH,
+          priority: 5,
+        },
+      );
+
       this.logger.log(
-        `Reset batch tracking for user ${this.idMasker.maskUserId(userId)}`,
+        `Created Nautilus job ${jobId} for user ${user.id} (socialId: ${this.idMasker.maskUserId(userId)}) to process quilt ${quiltBlobId}`,
+      );
+    } catch (error) {
+      // Log error but don't fail the batch processing
+      this.logger.error(
+        `Failed to create Nautilus job for user ${this.idMasker.maskUserId(userId)}:`,
+        error,
       );
     }
   }

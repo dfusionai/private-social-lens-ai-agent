@@ -41,11 +41,22 @@ export class SubmissionRelationalRepository implements SubmissionRepository {
     return entities.map((entity) => SubmissionMapper.toDomain(entity));
   }
 
+  async findByBatchId(batchId: string): Promise<Submission[]> {
+    const entities = await this.submissionRepository.find({
+      where: { batchId },
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+
+    return entities.map((entity) => SubmissionMapper.toDomain(entity));
+  }
+
   async findByUserAndBatchStatus(
     userId: number | string,
     _batchStatus: string,
   ): Promise<Submission[]> {
-    // This would need to join with user_batch_tracking table
+    // This would need to join with batch table
     // For now, we'll return all submissions for the user
     // This can be enhanced later if needed
     return this.findByUserId(userId);

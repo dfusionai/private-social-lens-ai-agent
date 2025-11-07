@@ -48,3 +48,5 @@ CLAUDE.md
 .env
 .env.k8s
 .env.*
+
+/dev-notes
