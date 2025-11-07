@@ -2,8 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import FormData from 'form-data';
-import { promises as fs } from 'fs';
-import { join } from 'path';
 import {
   QuiltPatch,
   QuiltPatchMetadata,
@@ -27,9 +25,7 @@ export class WalrusQuiltService {
   /**
    * Extract all chats from downloaded submissions and create quilt patches
    */
-  async extractChatsToPatches(
-    downloadResult: BatchDownloadResult,
-  ): Promise<QuiltPatch[]> {
+  extractChatsToPatches(downloadResult: BatchDownloadResult): QuiltPatch[] {
     const patches: QuiltPatch[] = [];
 
     for (const submission of downloadResult.submissions) {
@@ -41,9 +37,7 @@ export class WalrusQuiltService {
         const maskedSubmissionId = this.idMasker.reversiblyMaskSubmissionId(
           submission.submissionId,
         );
-        const maskedChatId = this.idMasker.reversiblyMaskChatId(
-          chat.chat_id,
-        );
+        const maskedChatId = this.idMasker.reversiblyMaskChatId(chat.chat_id);
 
         // Create unique identifier for this patch using masked IDs
         // Format: {maskedUserId}-{maskedSubmissionId}-{maskedChatId}
@@ -84,9 +78,6 @@ export class WalrusQuiltService {
     this.logger.log(
       `Extracted ${patches.length} chat patches from ${downloadResult.submissions.length} submissions`,
     );
-
-    // Write patches list to file for inspection
-    await this.writePatchesToFile(patches, downloadResult.userId);
 
     return patches;
   }
@@ -137,15 +128,6 @@ export class WalrusQuiltService {
       }));
       formData.append('_metadata', JSON.stringify(metadataArray));
 
-      // Write request to file for inspection (before sending)
-      await this.writeRequestToFile(
-        formData,
-        patches,
-        metadataArray,
-        submissionConfig.walrusPublisherUrl,
-        epochs,
-      );
-
       // Send HTTP request to Walrus publisher
       const url = `${submissionConfig.walrusPublisherUrl}/v1/quilts?epochs=${epochs}`;
       const headers = formData.getHeaders();
@@ -165,7 +147,7 @@ export class WalrusQuiltService {
 
       // Parse response
       const responseData = response.data;
-      
+
       // Extract on-chain blob object ID from newlyCreated
       const onChainBlobObjectId =
         responseData.blobStoreResult?.newlyCreated?.blobObject?.id;
@@ -240,7 +222,7 @@ export class WalrusQuiltService {
   ): Promise<QuiltPublishResult> {
     try {
       // Extract chats to patches
-      const patches = await this.extractChatsToPatches(downloadResult);
+      const patches = this.extractChatsToPatches(downloadResult);
 
       if (patches.length === 0) {
         throw new Error('No chats found in downloaded submissions');
@@ -256,135 +238,6 @@ export class WalrusQuiltService {
         error,
       );
       throw error;
-    }
-  }
-
-  /**
-   * Write patches list to file for inspection
-   */
-  private async writePatchesToFile(
-    patches: QuiltPatch[],
-    userId: string,
-  ): Promise<void> {
-    try {
-      const outputDir = join(process.cwd(), 'temp', 'walrus-quilts');
-      await fs.mkdir(outputDir, { recursive: true });
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const maskedUserId = this.idMasker.maskUserId(userId);
-      const filename = `quilt-patches-${maskedUserId}-${timestamp}.json`;
-      const filePath = join(outputDir, filename);
-
-      // Mask IDs in the output file for privacy (but keep real IDs in Walrus metadata)
-      const patchesData = patches.map((patch) => ({
-        identifier: patch.identifier, // Keep identifier as-is for reference
-        contentSize: patch.content.length,
-        contentPreview: patch.content.toString('utf8').substring(0, 200),
-        metadata: {
-          ...patch.metadata,
-          tags: {
-            ...patch.metadata.tags,
-            // Mask IDs in file output for privacy
-            userId: this.idMasker.maskUserId(patch.metadata.tags.userId),
-            submissionId: this.idMasker.maskSubmissionId(
-              patch.metadata.tags.submissionId,
-            ),
-            chatId: this.idMasker.maskChatId(patch.metadata.tags.chatId),
-          },
-        },
-      }));
-
-      const output = {
-        userId: maskedUserId, // Mask user ID in file output
-        totalPatches: patches.length,
-        extractedAt: new Date().toISOString(),
-        patches: patchesData,
-      };
-
-      await fs.writeFile(filePath, JSON.stringify(output, null, 2), 'utf8');
-
-      this.logger.log(`Quilt patches list written to file: ${filePath}`);
-    } catch (error) {
-      this.logger.warn(
-        `Failed to write patches list to file: ${error.message}`,
-      );
-    }
-  }
-
-  /**
-   * Write request data to file for inspection
-   */
-  private async writeRequestToFile(
-    formData: FormData,
-    patches: QuiltPatch[],
-    metadataArray: Array<{ identifier: string; tags: Record<string, string> }>,
-    publisherUrl: string,
-    epochs: number,
-  ): Promise<void> {
-    try {
-      const outputDir = join(process.cwd(), 'temp', 'walrus-quilts');
-      await fs.mkdir(outputDir, { recursive: true });
-
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `quilt-request-${timestamp}.json`;
-      const filePath = join(outputDir, filename);
-
-      // Extract form data information
-      // Mask IDs in file output for privacy (but keep real IDs in actual Walrus request)
-      const requestData = {
-        url: `${publisherUrl}/v1/quilts?epochs=${epochs}`,
-        method: 'PUT',
-        epochs,
-        totalPatches: patches.length,
-        headers: formData.getHeaders(),
-        metadata: metadataArray.map((meta) => ({
-          identifier: meta.identifier,
-          tags: {
-            ...meta.tags,
-            // Mask IDs in file output for privacy
-            userId: this.idMasker.maskUserId(meta.tags.userId),
-            submissionId: this.idMasker.maskSubmissionId(meta.tags.submissionId),
-            chatId: this.idMasker.maskChatId(meta.tags.chatId),
-          },
-        })),
-        patches: patches.map((patch) => ({
-          identifier: patch.identifier,
-          contentSize: patch.content.length,
-          contentPreview: patch.content.toString('utf8').substring(0, 500),
-          metadata: {
-            ...patch.metadata,
-            tags: {
-              ...patch.metadata.tags,
-              // Mask IDs in file output for privacy
-              userId: this.idMasker.maskUserId(patch.metadata.tags.userId),
-              submissionId: this.idMasker.maskSubmissionId(
-                patch.metadata.tags.submissionId,
-              ),
-              chatId: this.idMasker.maskChatId(patch.metadata.tags.chatId),
-            },
-          },
-        })),
-        requestInfo: {
-          contentType: formData.getHeaders()['content-type'],
-          totalSize: patches.reduce(
-            (sum, patch) => sum + patch.content.length,
-            0,
-          ),
-          createdAt: new Date().toISOString(),
-        },
-      };
-
-      await fs.writeFile(
-        filePath,
-        JSON.stringify(requestData, null, 2),
-        'utf8',
-      );
-
-      this.logger.log(`Quilt request data written to file: ${filePath}`);
-    } catch (error) {
-      this.logger.warn(
-        `Failed to write request data to file: ${error.message}`,
-      );
     }
   }
 }

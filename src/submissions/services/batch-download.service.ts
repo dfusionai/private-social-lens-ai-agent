@@ -1,6 +1,4 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
-import { promises as fs } from 'fs';
-import { join } from 'path';
 import { SubmissionRepository } from '../infrastructure/persistence/submission.repository';
 import { BatchRepository } from '../infrastructure/persistence/batch.repository';
 import { AzureBlobStorageService } from './azure-blob-storage.service';
@@ -153,11 +151,7 @@ export class BatchDownloadService {
         `Successfully downloaded ${downloadedSubmissions.length}/${submissions.length} submissions for user ${this.idMasker.maskUserId(userId)}. Total chats: ${totalChats}`,
       );
 
-      // Write result to local file for inspection
-      await this.writeResultToFile(result);
-
-      // Process quilt (extract patches and write files for inspection)
-      // This will always run to generate inspection files, even if URL is not configured
+      // Process quilt (extract patches and publish to Walrus)
       const submissionConfig = this.configService.get<SubmissionConfig>(
         'submission',
         { infer: true },
@@ -342,54 +336,6 @@ export class BatchDownloadService {
           submissionId: this.idMasker.maskSubmissionId(e.submissionId),
           error: e.error,
         })),
-      );
-    }
-  }
-
-  private async writeResultToFile(result: BatchDownloadResult): Promise<void> {
-    try {
-      // Create output directory if it doesn't exist
-      const outputDir = join(process.cwd(), 'temp', 'batch-downloads');
-      await fs.mkdir(outputDir, { recursive: true });
-
-      // Create filename with timestamp and masked user ID
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const maskedUserId = this.idMasker.maskUserId(result.userId);
-      const filename = `batch-download-${maskedUserId}-${timestamp}.json`;
-      const filePath = join(outputDir, filename);
-
-      // Convert Date objects to ISO strings for JSON serialization
-      // Mask IDs in the output for privacy
-      const serializableResult = {
-        ...result,
-        userId: maskedUserId, // Mask user ID in file output
-        downloadedAt: result.downloadedAt.toISOString(),
-        submissions: result.submissions.map((submission) => ({
-          ...submission,
-          submissionId: this.idMasker.maskSubmissionId(submission.submissionId), // Mask submission ID
-          data: {
-            ...submission.data,
-            user: this.idMasker.maskUserId(submission.data.user), // Mask user ID in data
-            chats: submission.data.chats.map((chat) => ({
-              ...chat,
-              chat_id: this.idMasker.maskChatId(chat.chat_id), // Mask chat ID
-            })),
-          },
-        })),
-      };
-
-      // Write to file with pretty formatting
-      await fs.writeFile(
-        filePath,
-        JSON.stringify(serializableResult, null, 2),
-        'utf8',
-      );
-
-      this.logger.log(`Batch download result written to file: ${filePath}`);
-    } catch (error) {
-      // Don't fail the batch download if file writing fails
-      this.logger.warn(
-        `Failed to write batch download result to file: ${error.message}`,
       );
     }
   }
