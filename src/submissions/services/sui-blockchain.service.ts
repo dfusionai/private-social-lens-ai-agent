@@ -233,4 +233,82 @@ export class SuiBlockchainService implements OnModuleInit {
       );
     }
   }
+
+  /**
+   * Save encrypted file on-chain via seal_manager::save_encrypted_file
+   * @param fileId - The Seal encryption ID (file object ID) as hex string
+   * @param policyObjId - The policy object ID
+   * @param metadata - File metadata object
+   * @returns On-chain file object ID
+   * @throws BadRequestException if service is not initialized
+   * @throws InternalServerErrorException if transaction fails
+   */
+  async saveEncryptedFileOnChain(
+    fileId: string,
+    policyObjId: string,
+    metadata: Record<string, any>,
+  ): Promise<string> {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    if (!this.movePackageId || !this.suiClient || !this.keypair) {
+      throw new BadRequestException(
+        'Sui blockchain service not properly initialized. Check configuration.',
+      );
+    }
+
+    try {
+      this.logger.log('💾 Saving encrypted file on-chain...');
+
+      const sender = this.keypair.getPublicKey().toSuiAddress();
+      const tx = new Transaction();
+      tx.setSender(sender);
+      tx.setGasBudget(10_000_000);
+
+      const metadataBytes = new Uint8Array(
+        new TextEncoder().encode(JSON.stringify(metadata)),
+      );
+
+      tx.moveCall({
+        target: `${this.movePackageId}::seal_manager::save_encrypted_file`,
+        arguments: [
+          tx.pure.vector('u8', fromHex(fileId)),
+          tx.object(policyObjId),
+          tx.pure.vector('u8', metadataBytes),
+        ],
+      });
+
+      const result = await this.suiClient.signAndExecuteTransaction({
+        transaction: tx,
+        signer: this.keypair,
+        requestType: 'WaitForLocalExecution',
+        options: {
+          showEffects: true,
+        },
+      } as any);
+
+      const onChainFileObjId =
+        (result as any).effects?.created?.[0]?.reference?.objectId || '';
+
+      if (!onChainFileObjId) {
+        throw new Error(
+          'Failed to save encrypted file onchain. No on-chain file object created.',
+        );
+      }
+
+      this.logger.log(
+        `✅ Encrypted file saved on-chain: ${onChainFileObjId}. Tx: ${(result as any).digest}`,
+      );
+      return onChainFileObjId;
+    } catch (error: any) {
+      this.logger.error(
+        `❌ Failed to save encrypted file on-chain: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Failed to save encrypted file on-chain: ${error.message}`,
+      );
+    }
+  }
 }

@@ -284,15 +284,34 @@ export class BatchDownloadService {
         });
 
         // Create Nautilus job to process the quilt
+        // Only create job if all patches have been saved on-chain successfully
+        const patchesWithOnChainIds = blobStoreResult?.patches?.filter(
+          (p) => p.onChainFileObjId,
+        );
+        const allPatchesSaved =
+          patchesWithOnChainIds?.length === blobStoreResult?.patches?.length;
+
         if (
           updatedBatch &&
           blobStoreResult?.quiltId &&
-          blobStoreResult?.quiltBlobId
+          blobStoreResult?.quiltBlobId &&
+          allPatchesSaved
         ) {
+          this.logger.log(
+            `All ${patchesWithOnChainIds?.length} patches saved on-chain. Creating Nautilus job...`,
+          );
           await this.createNautilusJob(
             userId,
             blobStoreResult.quiltId,
             blobStoreResult.quiltBlobId,
+          );
+        } else if (
+          updatedBatch &&
+          blobStoreResult?.quiltId &&
+          blobStoreResult?.quiltBlobId
+        ) {
+          this.logger.warn(
+            `Not all patches saved on-chain (${patchesWithOnChainIds?.length}/${blobStoreResult?.patches?.length}). Skipping Nautilus job creation.`,
           );
         }
       } catch (error) {

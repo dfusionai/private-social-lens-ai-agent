@@ -14,6 +14,9 @@ import { SubmissionConfig } from '../config/submission-config.type';
 import { AllConfigType } from '../../config/config.type';
 import { IdMaskerService } from '../../utils/id-masker.service';
 import { SealService } from './seal.service';
+import { SuiBlockchainService } from './sui-blockchain.service';
+import { EncryptedObject } from '@mysten/seal';
+import { toHex } from '@mysten/sui/utils';
 
 @Injectable()
 export class WalrusQuiltService {
@@ -25,6 +28,7 @@ export class WalrusQuiltService {
     private readonly idMasker: IdMaskerService,
     private readonly jwtService: JwtService,
     private readonly sealService: SealService,
+    private readonly suiBlockchainService: SuiBlockchainService,
   ) {}
 
   /**
@@ -128,6 +132,12 @@ export class WalrusQuiltService {
         `Encrypting ${patches.length} patch blobs with Seal before publishing...`,
       );
 
+      // Store encryption IDs for later use when saving on-chain
+      const patchEncryptionData = new Map<
+        string,
+        { encryptionId: string; encryptedBytes: Uint8Array }
+      >();
+
       for (const patch of patches) {
         try {
           // Encrypt the patch content using Seal encryption
@@ -141,6 +151,12 @@ export class WalrusQuiltService {
           this.logger.debug(
             `Encrypted patch ${patch.identifier} with encryption ID: ${encryptionId}`,
           );
+
+          // Store encryption data for later use
+          patchEncryptionData.set(patch.identifier, {
+            encryptionId,
+            encryptedBytes,
+          });
 
           // Add encrypted patch as a form field with identifier as field name
           // The content is now encrypted bytes instead of plain JSON
@@ -288,6 +304,63 @@ export class WalrusQuiltService {
 
       this.logger.log(
         `Quilt published successfully. On-chain ID: ${result.quiltId}, Blob ID: ${result.quiltBlobId}, Patches: ${result.totalPatches}`,
+      );
+
+      // After successful PUT request, save encrypted files on-chain
+      this.logger.log(
+        `Saving ${result.patches.length} encrypted patches on-chain...`,
+      );
+
+      // Save each encrypted patch on-chain
+      for (const patchResult of result.patches) {
+        const encryptionData = patchEncryptionData.get(patchResult.identifier);
+        if (!encryptionData) {
+          this.logger.warn(
+            `No encryption data found for patch ${patchResult.identifier}. Skipping on-chain save.`,
+          );
+          continue;
+        }
+
+        try {
+          // Extract encryption ID from encrypted bytes
+          const encryptedObject = EncryptedObject.parse(
+            encryptionData.encryptedBytes,
+          );
+          const fileId = toHex(encryptedObject.id as unknown as Uint8Array);
+
+          // Create metadata similar to frontend
+          const metadata = {
+            walrusUrl: `${submissionConfig.walrusPublisherUrl}/v1/blobs/${patchResult.quiltPatchId}`,
+            size: encryptionData.encryptedBytes.length,
+          };
+
+          // Save encrypted file on-chain
+          const onChainFileObjId =
+            await this.suiBlockchainService.saveEncryptedFileOnChain(
+              fileId,
+              submissionConfig.policyObjectId,
+              metadata,
+            );
+
+          // Store on-chain file object ID in result
+          patchResult.encryptionId = encryptionData.encryptionId;
+          patchResult.onChainFileObjId = onChainFileObjId;
+
+          this.logger.debug(
+            `Saved patch ${patchResult.identifier} on-chain: ${onChainFileObjId}`,
+          );
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to save patch ${patchResult.identifier} on-chain: ${error.message}`,
+            error.stack,
+          );
+          // Don't throw - log error but continue with other patches
+          // The patch is still published to Walrus, just not saved on-chain
+        }
+      }
+
+      this.logger.log(
+        `Completed on-chain saves. ${result.patches.filter((p) => p.onChainFileObjId).length}/${result.patches.length} patches saved on-chain.`,
       );
 
       return result;
