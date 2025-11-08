@@ -16,10 +16,10 @@ import {
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { SubmissionService } from './services/submission.service';
-import { CreateSubmissionDto } from './dto/create-submission.dto';
+import { EncryptedCreateSubmissionDto } from './dto/encrypted-create-submission.dto';
 import { UsersService } from '../users/users.service';
 import { JwtPayloadType } from '../auth/strategies/types/jwt-payload.type';
-import { UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 
 @ApiTags('Submissions')
 @ApiBearerAuth()
@@ -38,7 +38,7 @@ export class SubmissionsController {
   @ApiOperation({
     summary: 'Create a new submission',
     description:
-      "Submit chats data which will be stored temporarily in Azure Blob Storage until batch threshold is reached. The user ID in the payload must match the authenticated user's telegram ID.",
+      "Submit encrypted chats data which will be stored temporarily in Azure Blob Storage until batch threshold is reached. The encrypted data contains the CreateSubmissionDto encrypted with Seal. The user ID in the encrypted payload must match the authenticated user's telegram ID.",
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -72,7 +72,7 @@ export class SubmissionsController {
   @HttpCode(HttpStatus.CREATED)
   async createSubmission(
     @Request() request: { user: JwtPayloadType },
-    @Body() createSubmissionDto: CreateSubmissionDto,
+    @Body() encryptedSubmissionDto: EncryptedCreateSubmissionDto,
   ): Promise<{ submissionId: string; chatCount: number }> {
     // Fetch the full user object to get the socialId (telegram ID)
     const user = await this.usersService.findById(request.user.id);
@@ -83,15 +83,8 @@ export class SubmissionsController {
       throw new UnauthorizedException('User does not have a social ID');
     }
 
-    // Validate that the user ID from the DTO matches the authenticated user's socialId
-    if (createSubmissionDto.user !== user.socialId) {
-      throw new BadRequestException(
-        'User ID in submission does not match authenticated user',
-      );
-    }
-
     return await this.submissionService.createSubmission(
-      createSubmissionDto,
+      encryptedSubmissionDto,
       user.socialId,
     );
   }

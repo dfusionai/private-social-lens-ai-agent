@@ -56,6 +56,35 @@ class EnvironmentVariablesValidator {
   @IsOptional()
   @IsString()
   STAKING_CONTRACT_ADDRESS?: string;
+
+  @IsOptional()
+  @IsString()
+  SEAL_MOVE_PACKAGE_ID?: string;
+
+  @IsOptional()
+  @IsString()
+  SEAL_KEY_SERVERS?: string; // Comma-separated list
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  SEAL_ENCRYPTION_THRESHOLD?: number;
+
+  @IsOptional()
+  @IsString()
+  SEAL_RUBY_NODES_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  SEAL_SUI_NETWORK?: string;
+
+  @IsOptional()
+  @IsString()
+  SEAL_SUI_RPC_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  SEAL_SUI_SECRET_KEY?: string;
 }
 
 export default registerAs<SubmissionConfig>('submission', () => {
@@ -84,5 +113,17 @@ export default registerAs<SubmissionConfig>('submission', () => {
     blockchainRpcUrl: process.env.VANA_BLOCKCHAIN_RPC_URL,
     tokenContractAddress: process.env.VFSN_TOKEN_CONTRACT_ADDRESS,
     stakingContractAddress: process.env.STAKING_CONTRACT_ADDRESS,
+    // Seal encryption configuration
+    sealMovePackageId: process.env.SEAL_MOVE_PACKAGE_ID,
+    sealKeyServers: process.env.SEAL_KEY_SERVERS
+      ? process.env.SEAL_KEY_SERVERS.split(',').map((s) => s.trim())
+      : undefined,
+    sealEncryptionThreshold: process.env.SEAL_ENCRYPTION_THRESHOLD
+      ? parseInt(process.env.SEAL_ENCRYPTION_THRESHOLD, 10)
+      : 1,
+    sealRubyNodesApiKey: process.env.SEAL_RUBY_NODES_API_KEY,
+    sealSuiNetwork: process.env.SEAL_SUI_NETWORK || 'mainnet',
+    sealSuiRpcUrl: process.env.SEAL_SUI_RPC_URL,
+    sealSuiSecretKey: process.env.SEAL_SUI_SECRET_KEY,
   };
 });

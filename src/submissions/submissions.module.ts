@@ -8,7 +8,9 @@ import { SubmissionService } from './services/submission.service';
 import { AzureBlobStorageService } from './services/azure-blob-storage.service';
 import { BatchDownloadService } from './services/batch-download.service';
 import { WalrusQuiltService } from './services/walrus-quilt.service';
-import { BlockchainService } from './services/blockchain.service';
+import { VanaBlockchainService } from './services/vana-blockchain.service';
+import { SealService } from './services/seal.service';
+import { SuiBlockchainService } from './services/sui-blockchain.service';
 import { JobsModule } from '../jobs/jobs.module';
 import { UsersModule } from '../users/users.module';
 import { IdMaskerService } from '../utils/id-masker.service';
@@ -31,7 +33,9 @@ import submissionConfig from './config/submission.config';
     AzureBlobStorageService,
     BatchDownloadService,
     WalrusQuiltService,
-    BlockchainService,
+    VanaBlockchainService,
+    SealService,
+    SuiBlockchainService,
     IdMaskerService,
   ],
   exports: [
@@ -39,7 +43,7 @@ import submissionConfig from './config/submission.config';
     AzureBlobStorageService,
     BatchDownloadService,
     WalrusQuiltService,
-    BlockchainService,
+    VanaBlockchainService,
   ],
 })
 export class SubmissionsModule {}

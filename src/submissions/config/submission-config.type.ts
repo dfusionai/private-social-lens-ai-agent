@@ -13,4 +13,12 @@ export type SubmissionConfig = {
   blockchainRpcUrl?: string;
   tokenContractAddress?: string;
   stakingContractAddress?: string;
+  // Seal encryption configuration
+  sealMovePackageId?: string;
+  sealKeyServers?: string[];
+  sealEncryptionThreshold?: number;
+  sealRubyNodesApiKey?: string;
+  sealSuiNetwork?: string;
+  sealSuiRpcUrl?: string;
+  sealSuiSecretKey?: string; // Bech32-encoded private key for Seal decryption
 };

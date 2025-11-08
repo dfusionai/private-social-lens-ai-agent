@@ -13,6 +13,7 @@ import { BatchDownloadResult } from '../domain/downloaded-submission';
 import { SubmissionConfig } from '../config/submission-config.type';
 import { AllConfigType } from '../../config/config.type';
 import { IdMaskerService } from '../../utils/id-masker.service';
+import { SealService } from './seal.service';
 
 @Injectable()
 export class WalrusQuiltService {
@@ -23,6 +24,7 @@ export class WalrusQuiltService {
     private readonly configService: ConfigService<AllConfigType>,
     private readonly idMasker: IdMaskerService,
     private readonly jwtService: JwtService,
+    private readonly sealService: SealService,
   ) {}
 
   /**
@@ -120,12 +122,41 @@ export class WalrusQuiltService {
       // Create form data
       const formData = new FormData();
 
-      // Add each patch as a form field with identifier as field name
+      // Encrypt each patch blob with Seal before adding to form data
+      // This matches the frontend encryption pattern
+      this.logger.debug(
+        `Encrypting ${patches.length} patch blobs with Seal before publishing...`,
+      );
+
       for (const patch of patches) {
-        formData.append(patch.identifier, patch.content, {
-          filename: `${patch.identifier}.json`,
-          contentType: 'application/json',
-        });
+        try {
+          // Encrypt the patch content using Seal encryption
+          // The policyObjectId is used to generate the encryption ID
+          const { encryptedBytes, encryptionId } =
+            await this.sealService.encryptData(
+              patch.content,
+              submissionConfig.policyObjectId,
+            );
+
+          this.logger.debug(
+            `Encrypted patch ${patch.identifier} with encryption ID: ${encryptionId}`,
+          );
+
+          // Add encrypted patch as a form field with identifier as field name
+          // The content is now encrypted bytes instead of plain JSON
+          formData.append(patch.identifier, Buffer.from(encryptedBytes), {
+            filename: `${patch.identifier}.encrypted`,
+            contentType: 'application/octet-stream', // Encrypted data is binary
+          });
+        } catch (error: any) {
+          this.logger.error(
+            `Failed to encrypt patch ${patch.identifier}: ${error.message}`,
+            error.stack,
+          );
+          throw new Error(
+            `Failed to encrypt patch ${patch.identifier}: ${error.message}`,
+          );
+        }
       }
 
       // Add metadata field (must be named _metadata)

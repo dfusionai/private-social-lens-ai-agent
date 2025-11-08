@@ -3,7 +3,9 @@ import { SubmissionRepository } from '../infrastructure/persistence/submission.r
 import { BatchRepository } from '../infrastructure/persistence/batch.repository';
 import { AzureBlobStorageService } from './azure-blob-storage.service';
 import { WalrusQuiltService } from './walrus-quilt.service';
-import { BlockchainService } from './blockchain.service';
+import { VanaBlockchainService } from './vana-blockchain.service';
+import { SealService } from './seal.service';
+import { SuiBlockchainService } from './sui-blockchain.service';
 import {
   DownloadedSubmission,
   BatchDownloadResult,
@@ -28,13 +30,15 @@ export class BatchDownloadService {
     private readonly batchRepository: BatchRepository,
     private readonly azureBlobStorage: AzureBlobStorageService,
     private readonly walrusQuiltService: WalrusQuiltService,
-    private readonly blockchainService: BlockchainService,
+    private readonly blockchainService: VanaBlockchainService,
     private readonly tokenGatingConfigsService: tokenGatingConfigsService,
     private readonly configService: ConfigService<AllConfigType>,
     private readonly idMasker: IdMaskerService,
     @Inject(forwardRef(() => JobProducerService))
     private readonly jobProducerService: JobProducerService,
     private readonly usersService: UsersService,
+    private readonly sealService: SealService,
+    private readonly suiBlockchainService: SuiBlockchainService,
   ) {}
 
   async processBatchDownload(
@@ -102,10 +106,57 @@ export class BatchDownloadService {
             submission.blobName,
           );
 
-          // Parse JSON data
-          const submissionData: SubmissionData = JSON.parse(
-            blobData.toString('utf8'),
+          // Parse encrypted submission data
+          const encryptedSubmissionData = JSON.parse(blobData.toString('utf8'));
+
+          // Validate encrypted data structure
+          if (
+            !encryptedSubmissionData.encryptedData ||
+            !encryptedSubmissionData.encryptionId
+          ) {
+            throw new Error(
+              `Invalid encrypted submission data: missing encryptedData or encryptionId for submission ${this.idMasker.maskSubmissionId(submission.id)}`,
+            );
+          }
+
+          // Decrypt the submission data using Seal
+          this.logger.debug(
+            `Decrypting submission ${this.idMasker.maskSubmissionId(submission.id)}...`,
           );
+
+          const submissionConfig = this.configService.get<SubmissionConfig>(
+            'submission',
+            { infer: true },
+          );
+
+          // Decrypt the encrypted data
+          const decryptedDto = await this.sealService.decryptSubmission(
+            encryptedSubmissionData.encryptedData,
+            encryptedSubmissionData.encryptionId,
+            submissionConfig.policyObjectId,
+            {
+              getKeypairAddress: () =>
+                this.suiBlockchainService.getKeypairAddress(),
+              signPersonalMessage: (message: string) =>
+                this.suiBlockchainService.signPersonalMessage(message),
+              sealApprove: (fileObjectId: string, policyObjectId: string) =>
+                this.suiBlockchainService.sealApprove(
+                  fileObjectId,
+                  policyObjectId,
+                ),
+            },
+          );
+
+          // Convert decrypted DTO to SubmissionData format
+          // Use walletAddress from encrypted metadata (available before decryption)
+          const submissionData: SubmissionData = {
+            revision: decryptedDto.revision,
+            source: decryptedDto.source,
+            user: encryptedSubmissionData.userId || decryptedDto.user,
+            submission_token: decryptedDto.submission_token,
+            walletAddress: encryptedSubmissionData.walletAddress,
+            chats: decryptedDto.chats,
+          };
 
           // Validate that we got the expected data structure
           if (!submissionData.chats || !Array.isArray(submissionData.chats)) {
@@ -125,11 +176,11 @@ export class BatchDownloadService {
           totalChats += submission.chatCount;
 
           this.logger.debug(
-            `Successfully downloaded submission ${this.idMasker.maskSubmissionId(submission.id)} with ${submission.chatCount} chats`,
+            `Successfully decrypted and downloaded submission ${this.idMasker.maskSubmissionId(submission.id)} with ${submission.chatCount} chats`,
           );
         } catch (error) {
           this.logger.error(
-            `Failed to download blob for submission ${this.idMasker.maskSubmissionId(submission.id)} (${submission.blobName}):`,
+            `Failed to download/decrypt blob for submission ${this.idMasker.maskSubmissionId(submission.id)} (${submission.blobName}):`,
             error,
           );
           // Continue with other submissions even if one fails

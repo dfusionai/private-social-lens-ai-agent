@@ -86,8 +86,8 @@ export interface Stake {
 }
 
 @Injectable()
-export class BlockchainService {
-  private readonly logger = new Logger(BlockchainService.name);
+export class VanaBlockchainService {
+  private readonly logger = new Logger(VanaBlockchainService.name);
   private rpcProvider: ethers.JsonRpcProvider | null = null;
   private tokenContract: ethers.Contract | null = null;
   private stakingContract: ethers.Contract | null = null;

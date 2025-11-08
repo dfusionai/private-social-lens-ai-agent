@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { SubmissionRepository } from '../infrastructure/persistence/submission.repository';
 import { BatchRepository } from '../infrastructure/persistence/batch.repository';
 import { AzureBlobStorageService } from './azure-blob-storage.service';
-import { CreateSubmissionDto } from '../dto/create-submission.dto';
+import { EncryptedCreateSubmissionDto } from '../dto/encrypted-create-submission.dto';
 import { Submission } from '../domain/submission';
 import { Batch } from '../domain/batch';
 import { SubmissionConfig } from '../config/submission-config.type';
@@ -27,14 +27,14 @@ export class SubmissionService {
   ) {}
 
   async createSubmission(
-    createSubmissionDto: CreateSubmissionDto,
+    encryptedSubmissionDto: EncryptedCreateSubmissionDto,
     userId: string,
   ): Promise<{ submissionId: string; chatCount: number }> {
     try {
       // 1. Use the userId from authenticated user (telegram ID)
 
-      // 2. Calculate total chat count for this submission
-      const submissionChatCount = createSubmissionDto.chats.length;
+      // 2. Get chat count from the encrypted DTO metadata (since we can't decrypt yet)
+      const submissionChatCount = encryptedSubmissionDto.submissionChatCount;
 
       // 3. Get or create batch for this submission
       const batch = await this.findOrCreateBatch(userId, submissionChatCount);
@@ -46,46 +46,24 @@ export class SubmissionService {
         );
       }
 
-      // 4. Store submission as blob in Azure Blob Storage
+      // 4. Store encrypted submission as blob in Azure Blob Storage
+      // The encrypted data is stored as-is without decryption
       const blobName = `submissions/${userId}/${uuidv4()}.json`;
-      const submissionData = {
-        revision: createSubmissionDto.revision,
-        source: createSubmissionDto.source,
-        user: userId, // Use authenticated user's socialId (telegram ID)
-        submission_token: createSubmissionDto.submission_token,
-        walletAddress: createSubmissionDto.walletAddress,
-        chats: createSubmissionDto.chats,
+      const encryptedSubmissionData = {
+        encryptedData: encryptedSubmissionDto.encryptedData,
+        encryptionId: encryptedSubmissionDto.encryptionId,
+        // Store metadata that we need before decryption
+        submissionChatCount: encryptedSubmissionDto.submissionChatCount,
+        walletAddress: encryptedSubmissionDto.walletAddress,
+        userId: userId, // Store authenticated user's socialId (telegram ID)
       };
 
-      // Log to verify data is preserved
-      if (submissionData.chats && submissionData.chats.length > 0) {
-        const firstChat = submissionData.chats[0];
-        this.logger.debug(
-          `Storing submission with ${submissionData.chats.length} chats. First chat has ${firstChat.contents?.length || 0} messages`,
-        );
-        if (firstChat.contents && firstChat.contents.length > 0) {
-          const firstMessage = firstChat.contents[0];
-          const messageKeys = Object.keys(firstMessage || {});
-          this.logger.debug(
-            `First message has ${messageKeys.length} properties: ${messageKeys.slice(0, 5).join(', ')}${messageKeys.length > 5 ? '...' : ''}`,
-          );
-        }
-      }
+      this.logger.debug(
+        `Storing encrypted submission with ${submissionChatCount} chats (encryption ID: ${encryptedSubmissionDto.encryptionId})`,
+      );
 
-      // Use JSON.stringify with a replacer to handle Buffer objects and other edge cases
-      const serializedData = JSON.stringify(submissionData, (key, value) => {
-        // Handle Buffer objects (convert to {type: 'Buffer', data: [...]})
-        if (
-          value &&
-          typeof value === 'object' &&
-          value.type === 'Buffer' &&
-          Array.isArray(value.data)
-        ) {
-          return value; // Already in Buffer format, keep as is
-        }
-        // Handle all other values normally
-        return value;
-      });
+      // Serialize encrypted submission data
+      const serializedData = JSON.stringify(encryptedSubmissionData);
 
       const blobUrl = await this.azureBlobStorage.uploadBlob(
         blobName,
@@ -111,7 +89,7 @@ export class SubmissionService {
       });
 
       this.logger.log(
-        `Created submission ${this.idMasker.maskSubmissionId(submission.id)} for user ${this.idMasker.maskUserId(userId)} in batch ${batch.batchNumber}. Batch chats: ${newChatCount}`,
+        `Created encrypted submission ${this.idMasker.maskSubmissionId(submission.id)} for user ${this.idMasker.maskUserId(userId)} in batch ${batch.batchNumber}. Batch chats: ${newChatCount}`,
       );
 
       // 7. Check if threshold reached and trigger batch processing
@@ -133,7 +111,7 @@ export class SubmissionService {
         chatCount: newChatCount,
       };
     } catch (error) {
-      this.logger.error('Failed to create submission:', error);
+      this.logger.error('Failed to create encrypted submission:', error);
       throw error;
     }
   }
