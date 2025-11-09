@@ -125,6 +125,7 @@ export class SubmissionService {
    * - No batch exists for the user
    * - Latest batch is 'failed'
    * - Latest batch is 'processing' (can't add to it)
+   * - Latest batch is 'completed' (can't add to completed batches)
    * - Adding to latest batch would exceed max threshold
    */
   private async findOrCreateBatch(
@@ -148,6 +149,7 @@ export class SubmissionService {
       !latestBatch ||
       latestBatch.batchStatus === 'failed' ||
       latestBatch.batchStatus === 'processing' ||
+      latestBatch.batchStatus === 'completed' ||
       latestBatch.chatCount + submissionChatCount >
         submissionConfig.batchChatMaxThreshold;
 

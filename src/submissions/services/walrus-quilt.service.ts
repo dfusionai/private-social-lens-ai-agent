@@ -15,8 +15,6 @@ import { AllConfigType } from '../../config/config.type';
 import { IdMaskerService } from '../../utils/id-masker.service';
 import { SealService } from './seal.service';
 import { SuiBlockchainService } from './sui-blockchain.service';
-import { EncryptedObject } from '@mysten/seal';
-import { toHex } from '@mysten/sui/utils';
 
 @Injectable()
 export class WalrusQuiltService {
@@ -322,11 +320,9 @@ export class WalrusQuiltService {
         }
 
         try {
-          // Extract encryption ID from encrypted bytes
-          const encryptedObject = EncryptedObject.parse(
-            encryptionData.encryptedBytes,
-          );
-          const fileId = toHex(encryptedObject.id as unknown as Uint8Array);
+          // Use the encryption ID directly (already a hex string from encryptData)
+          // No need to parse EncryptedObject since we already have the encryptionId
+          const fileId = encryptionData.encryptionId;
 
           // Create metadata similar to frontend
           const metadata = {
