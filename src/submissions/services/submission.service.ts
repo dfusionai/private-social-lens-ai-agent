@@ -48,14 +48,16 @@ export class SubmissionService {
 
       // 4. Store encrypted submission as blob in Azure Blob Storage
       // The encrypted data is stored as-is without decryption
-      const blobName = `submissions/${userId}/${uuidv4()}.json`;
+      // Mask userId for privacy in blob path and database
+      const maskedUserId = this.idMasker.reversiblyMaskUserId(userId);
+      const blobName = `submissions/${maskedUserId}/${uuidv4()}.json`;
       const encryptedSubmissionData = {
         encryptedData: encryptedSubmissionDto.encryptedData,
         encryptionId: encryptedSubmissionDto.encryptionId,
         // Store metadata that we need before decryption
         submissionChatCount: encryptedSubmissionDto.submissionChatCount,
         walletAddress: encryptedSubmissionDto.walletAddress,
-        userId: userId, // Store authenticated user's socialId (telegram ID)
+        userId: userId, // Store original userId in encrypted data (for decryption context)
       };
 
       this.logger.debug(
@@ -72,9 +74,10 @@ export class SubmissionService {
       );
 
       // 5. Save submission record (without submissionData - data is stored in blob)
+      // Store masked userId in database for privacy
       const submission = await this.submissionRepository.create(
         new Submission({
-          userId: userId,
+          userId: maskedUserId, // Store masked userId in database
           blobUrl,
           blobName,
           chatCount: submissionChatCount,
@@ -133,8 +136,12 @@ export class SubmissionService {
       { infer: true },
     );
 
-    // Find latest batch for user
-    const latestBatch = await this.batchRepository.findLatestByUserId(userId);
+    // Mask userId for database queries (privacy)
+    const maskedUserId = this.idMasker.reversiblyMaskUserId(userId);
+
+    // Find latest batch for user (using masked userId)
+    const latestBatch =
+      await this.batchRepository.findLatestByUserId(maskedUserId);
 
     // Determine if we need a new batch
     const needsNewBatch =
@@ -150,7 +157,7 @@ export class SubmissionService {
       const batchNumber = latestBatch ? latestBatch.batchNumber + 1 : 1;
       const newBatch = await this.batchRepository.create(
         new Batch({
-          userId: userId,
+          userId: maskedUserId, // Store masked userId in database
           batchNumber: batchNumber,
           chatCount: 0, // Start with 0, will be updated after submission is created
           batchStatus: 'pending',
@@ -209,10 +216,14 @@ export class SubmissionService {
   }
 
   async getUserSubmissions(userId: string): Promise<Submission[]> {
-    return await this.submissionRepository.findByUserId(userId);
+    // Mask userId for database query (privacy)
+    const maskedUserId = this.idMasker.reversiblyMaskUserId(userId);
+    return await this.submissionRepository.findByUserId(maskedUserId);
   }
 
   async getUserBatches(userId: string): Promise<Batch[]> {
-    return await this.batchRepository.findByUserId(userId);
+    // Mask userId for database query (privacy)
+    const maskedUserId = this.idMasker.reversiblyMaskUserId(userId);
+    return await this.batchRepository.findByUserId(maskedUserId);
   }
 }
