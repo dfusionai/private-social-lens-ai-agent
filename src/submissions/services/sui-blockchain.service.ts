@@ -11,7 +11,7 @@ import { AllConfigType } from '../../config/config.type';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
-import { fromHex, fromBase64 } from '@mysten/sui/utils';
+import { fromHex } from '@mysten/sui/utils';
 import { bech32 } from 'bech32';
 
 /**
@@ -159,29 +159,32 @@ export class SuiBlockchainService implements OnModuleInit {
 
   /**
    * Sign a personal message
-   * @param message - The message to sign
-   * @returns Signature object with signature bytes (Uint8Array)
+   * @param message - The message to sign (string or Uint8Array/Buffer)
+   * @returns Signature object with signature as base64 string
    * @throws InternalServerErrorException if signing fails
    */
   async signPersonalMessage(
-    message: string,
-  ): Promise<{ signature: Uint8Array }> {
+    message: string | Uint8Array | Buffer,
+  ): Promise<{ signature: string }> {
     if (!this.isInitialized) {
       await this.initialize();
     }
 
     try {
-      // signPersonalMessage expects a Buffer, not a string
-      const messageBuffer = Buffer.from(message);
+      // signPersonalMessage expects a Buffer
+      const messageBuffer =
+        message instanceof Uint8Array || Buffer.isBuffer(message)
+          ? Buffer.from(message)
+          : Buffer.from(message);
+
       const result = await this.keypair.signPersonalMessage(messageBuffer);
 
       // keypair.signPersonalMessage returns { bytes: string, signature: string }
-      // Both are base64-encoded strings. setPersonalMessageSignature expects Uint8Array,
-      // so we need to decode the base64 signature string back to bytes
-      const signatureBytes = fromBase64(result.signature);
-
+      // Both are base64-encoded strings. setPersonalMessageSignature expects
+      // the signature as a base64 string (NOT decoded bytes)
+      // Return the signature directly as a base64 string
       return {
-        signature: signatureBytes,
+        signature: result.signature,
       };
     } catch (error: any) {
       this.logger.error(

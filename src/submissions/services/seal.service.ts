@@ -284,9 +284,23 @@ export class SealService implements OnModuleInit {
       }
 
       // Step 3: Get message from sessionKey
-      let message: string;
+      // getPersonalMessage() returns Uint8Array, not a string
+      let message: string | Uint8Array;
       try {
-        message = sessionKey.getPersonalMessage();
+        const rawMessage = sessionKey.getPersonalMessage();
+        // Handle both string and Uint8Array/Buffer
+        if (typeof rawMessage === 'string') {
+          message = rawMessage;
+        } else if (
+          rawMessage instanceof Uint8Array ||
+          Buffer.isBuffer(rawMessage)
+        ) {
+          // Convert Uint8Array to string for signing
+          message = Buffer.from(rawMessage).toString('utf-8');
+        } else {
+          // Fallback: convert to string
+          message = String(rawMessage);
+        }
         this.logger.debug(
           `[sessionKey.getPersonalMessage] 🎯 Got personal message`,
         );
@@ -301,11 +315,14 @@ export class SealService implements OnModuleInit {
       }
 
       // Step 4: Sign the message
-      let signature: { signature: Uint8Array };
+      // signPersonalMessage now accepts string or Uint8Array/Buffer
+      // and returns signature as base64 string (not decoded bytes)
+      let signature: { signature: string };
       try {
         signature =
           await this.suiBlockchainService.signPersonalMessage(message);
         this.logger.debug(`[signPersonalMessage] 🎯 Signature generated`);
+        // setPersonalMessageSignature expects the signature as a base64 string
         await sessionKey.setPersonalMessageSignature(signature.signature);
         this.logger.debug(
           `[setPersonalMessageSignature] 🎯 Personal message signature set`,
