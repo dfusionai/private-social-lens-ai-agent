@@ -59,7 +59,7 @@ class EnvironmentVariablesValidator {
 
   @IsOptional()
   @IsString()
-  SEAL_MOVE_PACKAGE_ID?: string;
+  MOVE_PACKAGE_ID?: string;
 
   @IsOptional()
   @IsString()
@@ -110,7 +110,7 @@ export default registerAs<SubmissionConfig>('submission', () => {
     tokenContractAddress: process.env.VFSN_TOKEN_CONTRACT_ADDRESS,
     stakingContractAddress: process.env.STAKING_CONTRACT_ADDRESS,
     // Seal encryption configuration
-    sealMovePackageId: process.env.SEAL_MOVE_PACKAGE_ID,
+    movePackageId: process.env.MOVE_PACKAGE_ID,
     sealKeyServers: process.env.SEAL_KEY_SERVERS
       ? process.env.SEAL_KEY_SERVERS.split(',').map((s) => s.trim())
       : undefined,

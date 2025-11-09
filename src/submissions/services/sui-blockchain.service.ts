@@ -107,13 +107,13 @@ export class SuiBlockchainService implements OnModuleInit {
         );
       }
 
-      if (!this.submissionConfig.sealMovePackageId) {
+      if (!this.submissionConfig.movePackageId) {
         throw new BadRequestException(
-          'Seal Move Package ID not configured. Set SEAL_MOVE_PACKAGE_ID environment variable.',
+          'Move Package ID not configured. Set MOVE_PACKAGE_ID environment variable.',
         );
       }
 
-      this.movePackageId = this.submissionConfig.sealMovePackageId;
+      this.movePackageId = this.submissionConfig.movePackageId;
 
       // Initialize Sui client
       const network = this.submissionConfig.suiNetwork || 'mainnet';

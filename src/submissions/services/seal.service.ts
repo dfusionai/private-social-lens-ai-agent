@@ -55,14 +55,14 @@ export class SealService implements OnModuleInit {
 
   private initializeSealClient(): void {
     try {
-      if (!this.submissionConfig.sealMovePackageId) {
+      if (!this.submissionConfig.movePackageId) {
         this.logger.warn(
-          'Seal Move Package ID not configured. Seal encryption/decryption will not be available.',
+          'Move Package ID not configured. Seal encryption/decryption will not be available.',
         );
         return;
       }
 
-      this.movePackageId = this.submissionConfig.sealMovePackageId;
+      this.movePackageId = this.submissionConfig.movePackageId;
 
       if (
         !this.submissionConfig.sealKeyServers ||

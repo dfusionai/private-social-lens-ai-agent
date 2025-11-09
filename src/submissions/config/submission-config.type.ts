@@ -14,7 +14,7 @@ export type SubmissionConfig = {
   tokenContractAddress?: string;
   stakingContractAddress?: string;
   // Seal encryption configuration
-  sealMovePackageId?: string;
+  movePackageId?: string;
   sealKeyServers?: string[];
   sealEncryptionThreshold?: number;
   sealRubyNodesApiKey?: string;
