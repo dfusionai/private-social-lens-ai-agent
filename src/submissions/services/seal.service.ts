@@ -13,6 +13,7 @@ import { SealClient, SessionKey, EncryptedObject } from '@mysten/seal';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { fromHex, toHex } from '@mysten/sui/utils';
 import { getRandomValues } from 'crypto';
+import { SuiBlockchainService } from './sui-blockchain.service';
 
 /**
  * Service for encrypting and decrypting data using Seal encryption.
@@ -35,7 +36,10 @@ export class SealService implements OnModuleInit {
   private encryptionThreshold: number = 1;
   private isInitialized = false;
 
-  constructor(private readonly configService: ConfigService<AllConfigType>) {
+  constructor(
+    private readonly configService: ConfigService<AllConfigType>,
+    private readonly suiBlockchainService: SuiBlockchainService,
+  ) {
     this.submissionConfig = this.configService.get<SubmissionConfig>(
       'submission',
       { infer: true },
@@ -76,14 +80,8 @@ export class SealService implements OnModuleInit {
         this.submissionConfig.sealEncryptionThreshold || 1;
 
       // Initialize Sui client
-      const network =
-        (this.submissionConfig.sealSuiNetwork as
-          | 'mainnet'
-          | 'testnet'
-          | 'devnet'
-          | 'localnet') || 'mainnet';
-      const rpcUrl =
-        this.submissionConfig.sealSuiRpcUrl || getFullnodeUrl(network);
+      const network = this.submissionConfig.suiNetwork || 'mainnet';
+      const rpcUrl = getFullnodeUrl(network);
       this.suiClient = new SuiClient({ url: rpcUrl });
 
       // Initialize Seal client
@@ -223,7 +221,6 @@ export class SealService implements OnModuleInit {
    * @param encryptedData - Base64-encoded encrypted bytes
    * @param encryptionId - The Seal encryption ID (fileObjectId)
    * @param policyObjectId - The policy object ID
-   * @param suiOperations - Sui operations adapter for signing and approval
    * @returns Decrypted CreateSubmissionDto
    * @throws BadRequestException if service is not initialized or parameters are invalid
    * @throws InternalServerErrorException if decryption fails
@@ -232,14 +229,6 @@ export class SealService implements OnModuleInit {
     encryptedData: string,
     encryptionId: string,
     policyObjectId: string,
-    suiOperations: {
-      getKeypairAddress: () => string;
-      signPersonalMessage: (message: string) => Promise<{ signature: string }>;
-      sealApprove: (
-        fileObjectId: string,
-        policyObjectId: string,
-      ) => Promise<Uint8Array>;
-    },
   ): Promise<CreateSubmissionDto> {
     if (!this.isInitialized || !this.sealClient || !this.movePackageId) {
       throw new BadRequestException(
@@ -262,7 +251,7 @@ export class SealService implements OnModuleInit {
       // Step 1: Get the address
       let address: string;
       try {
-        address = suiOperations.getKeypairAddress();
+        address = await this.suiBlockchainService.getKeypairAddress();
         this.logger.debug(`[address] 🎯 Got keypair address`);
       } catch (err: any) {
         this.logger.error(
@@ -312,9 +301,10 @@ export class SealService implements OnModuleInit {
       }
 
       // Step 4: Sign the message
-      let signature: { signature: string };
+      let signature: { signature: Uint8Array };
       try {
-        signature = await suiOperations.signPersonalMessage(message);
+        signature =
+          await this.suiBlockchainService.signPersonalMessage(message);
         this.logger.debug(`[signPersonalMessage] 🎯 Signature generated`);
         await sessionKey.setPersonalMessageSignature(signature.signature);
         this.logger.debug(
@@ -333,7 +323,10 @@ export class SealService implements OnModuleInit {
       // Step 5: Approve the seal
       let txBytes: Uint8Array;
       try {
-        txBytes = await suiOperations.sealApprove(encryptionId, policyObjectId);
+        txBytes = await this.suiBlockchainService.sealApprove(
+          encryptionId,
+          policyObjectId,
+        );
         this.logger.debug(`[sealApprove] 🎯 Seal approval received`);
       } catch (err: any) {
         this.logger.error(`[sealApprove] ❌ Failed: ${err.message}`, err.stack);

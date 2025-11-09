@@ -165,3 +165,13 @@ STAKING_CONTRACT_ADDRESS=
 # Set a secret salt for deterministic ID masking
 # Same input always produces same masked output
 ID_MASK_SALT=change-this-to-a-secret-salt-in-production
+
+# Seal Encryption Configuration
+SEAL_MOVE_PACKAGE_ID=your-seal-move-package-id-here
+SEAL_KEY_SERVERS=0x7b757569e0f57c1bebcddcf934ecce4c59f668aec53ab012060e23654649efed
+SEAL_ENCRYPTION_THRESHOLD=1
+SEAL_RUBY_NODES_API_KEY=your-ruby-nodes-api-key-here
+
+# Sui Blockchain Configuration (for Seal)
+SUI_NETWORK=testnet
+SUI_SECRET_KEY=suiprivkey1qpzj36305hv03zvv6qws6zch89c3gk0tdqn5cl3fpffsvpzak43wyz47xqq

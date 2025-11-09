@@ -18,7 +18,6 @@ export type SubmissionConfig = {
   sealKeyServers?: string[];
   sealEncryptionThreshold?: number;
   sealRubyNodesApiKey?: string;
-  sealSuiNetwork?: string;
-  sealSuiRpcUrl?: string;
-  sealSuiSecretKey?: string; // Bech32-encoded private key for Seal decryption
+  suiNetwork?: 'mainnet' | 'testnet' | 'devnet' | 'localnet';
+  suiSecretKey?: string; // Bech32-encoded private key for Seal decryption
 };

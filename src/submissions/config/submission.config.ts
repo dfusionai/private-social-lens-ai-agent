@@ -76,15 +76,11 @@ class EnvironmentVariablesValidator {
 
   @IsOptional()
   @IsString()
-  SEAL_SUI_NETWORK?: string;
+  SUI_NETWORK?: string;
 
   @IsOptional()
   @IsString()
-  SEAL_SUI_RPC_URL?: string;
-
-  @IsOptional()
-  @IsString()
-  SEAL_SUI_SECRET_KEY?: string;
+  SUI_SECRET_KEY?: string;
 }
 
 export default registerAs<SubmissionConfig>('submission', () => {
@@ -122,8 +118,13 @@ export default registerAs<SubmissionConfig>('submission', () => {
       ? parseInt(process.env.SEAL_ENCRYPTION_THRESHOLD, 10)
       : 1,
     sealRubyNodesApiKey: process.env.SEAL_RUBY_NODES_API_KEY,
-    sealSuiNetwork: process.env.SEAL_SUI_NETWORK || 'mainnet',
-    sealSuiRpcUrl: process.env.SEAL_SUI_RPC_URL,
-    sealSuiSecretKey: process.env.SEAL_SUI_SECRET_KEY,
+    suiNetwork:
+      (process.env.SUI_NETWORK as
+        | 'mainnet'
+        | 'testnet'
+        | 'devnet'
+        | 'localnet'
+        | undefined) || 'mainnet',
+    suiSecretKey: process.env.SUI_SECRET_KEY,
   };
 });

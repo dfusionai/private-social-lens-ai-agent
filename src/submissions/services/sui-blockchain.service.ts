@@ -11,8 +11,8 @@ import { AllConfigType } from '../../config/config.type';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
-import { fromHex, toBase64 } from '@mysten/sui/utils';
-import * as bech32 from 'bech32';
+import { fromHex, fromBase64 } from '@mysten/sui/utils';
+import { bech32 } from 'bech32';
 
 /**
  * Service for handling Sui blockchain operations required for Seal decryption.
@@ -67,30 +67,45 @@ export class SuiBlockchainService implements OnModuleInit {
   private _doInitialize(): void {
     try {
       // Get bech32-encoded private key from config (NestJS standard)
-      const suiSecretKey = this.submissionConfig.sealSuiSecretKey;
+      const suiSecretKey = this.submissionConfig.suiSecretKey;
 
       if (!suiSecretKey) {
         throw new BadRequestException(
-          'Seal Sui secret key not configured. Set SEAL_SUI_SECRET_KEY environment variable.',
+          'Sui secret key not configured. Set SUI_SECRET_KEY environment variable.',
         );
       }
 
       // Decode bech32 private key
-      let decoded;
+      // Try multiple formats robustly (matching SuiWalletService pattern)
       try {
-        decoded = bech32.bech32.decode(suiSecretKey);
-        if (!decoded) {
-          throw new Error('Invalid bech32 private key format');
+        // Prefer bech32 suiprivkey (schema-prefixed format)
+        if (suiSecretKey.startsWith('suiprivkey')) {
+          const decoded = bech32.decode(suiSecretKey);
+          if (!decoded) {
+            throw new Error('Invalid bech32 private key');
+          }
+          const words = bech32.fromWords(decoded.words);
+          if (!words || words.length < 33) {
+            throw new Error('Invalid suiprivkey length');
+          }
+          // First byte is the scheme flag; following 32 bytes are the secret
+          const rawSecretKey = Buffer.from(words).slice(1, 33);
+          this.keypair = Ed25519Keypair.fromSecretKey(rawSecretKey);
+        } else {
+          // Fallback: try bech32 decode without suiprivkey prefix
+          const decoded = bech32.decode(suiSecretKey);
+          if (!decoded) {
+            throw new Error('Invalid bech32 private key format');
+          }
+          const privateKeyBytes = bech32.fromWords(decoded.words);
+          const rawSecretKey = Buffer.from(privateKeyBytes).subarray(1);
+          this.keypair = Ed25519Keypair.fromSecretKey(rawSecretKey);
         }
       } catch (error: any) {
         throw new BadRequestException(
           `Invalid bech32 private key format: ${error.message}`,
         );
       }
-
-      const privateKeyBytes = bech32.bech32.fromWords(decoded.words);
-      const rawSecretKey = Buffer.from(privateKeyBytes).subarray(1);
-      this.keypair = Ed25519Keypair.fromSecretKey(rawSecretKey);
 
       if (!this.submissionConfig.sealMovePackageId) {
         throw new BadRequestException(
@@ -101,14 +116,8 @@ export class SuiBlockchainService implements OnModuleInit {
       this.movePackageId = this.submissionConfig.sealMovePackageId;
 
       // Initialize Sui client
-      const network =
-        (this.submissionConfig.sealSuiNetwork as
-          | 'mainnet'
-          | 'testnet'
-          | 'devnet'
-          | 'localnet') || 'mainnet';
-      const rpcUrl =
-        this.submissionConfig.sealSuiRpcUrl || getFullnodeUrl(network);
+      const network = this.submissionConfig.suiNetwork || 'mainnet';
+      const rpcUrl = getFullnodeUrl(network);
       this.suiClient = new SuiClient({ url: rpcUrl });
 
       const address = this.keypair.getPublicKey().toSuiAddress();
@@ -135,10 +144,14 @@ export class SuiBlockchainService implements OnModuleInit {
    * Get the keypair address
    * @throws BadRequestException if keypair is not initialized
    */
-  getKeypairAddress(): string {
-    if (!this.isInitialized || !this.keypair) {
+  async getKeypairAddress(): Promise<string> {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    if (!this.keypair) {
       throw new BadRequestException(
-        'Sui keypair not initialized. Check SEAL_SUI_SECRET_KEY configuration.',
+        'Sui keypair not initialized. Check SUI_SECRET_KEY configuration.',
       );
     }
     return this.keypair.getPublicKey().toSuiAddress();
@@ -147,10 +160,12 @@ export class SuiBlockchainService implements OnModuleInit {
   /**
    * Sign a personal message
    * @param message - The message to sign
-   * @returns Signature object with base64-encoded signature
+   * @returns Signature object with signature bytes (Uint8Array)
    * @throws InternalServerErrorException if signing fails
    */
-  async signPersonalMessage(message: string): Promise<{ signature: string }> {
+  async signPersonalMessage(
+    message: string,
+  ): Promise<{ signature: Uint8Array }> {
     if (!this.isInitialized) {
       await this.initialize();
     }
@@ -158,10 +173,15 @@ export class SuiBlockchainService implements OnModuleInit {
     try {
       // signPersonalMessage expects a Buffer, not a string
       const messageBuffer = Buffer.from(message);
-      const signature = await this.keypair.signPersonalMessage(messageBuffer);
+      const result = await this.keypair.signPersonalMessage(messageBuffer);
+
+      // keypair.signPersonalMessage returns { bytes: string, signature: string }
+      // Both are base64-encoded strings. setPersonalMessageSignature expects Uint8Array,
+      // so we need to decode the base64 signature string back to bytes
+      const signatureBytes = fromBase64(result.signature);
 
       return {
-        signature: toBase64(signature),
+        signature: signatureBytes,
       };
     } catch (error: any) {
       this.logger.error(

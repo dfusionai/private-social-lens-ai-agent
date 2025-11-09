@@ -134,17 +134,6 @@ export class BatchDownloadService {
             encryptedSubmissionData.encryptedData,
             encryptedSubmissionData.encryptionId,
             submissionConfig.policyObjectId,
-            {
-              getKeypairAddress: () =>
-                this.suiBlockchainService.getKeypairAddress(),
-              signPersonalMessage: (message: string) =>
-                this.suiBlockchainService.signPersonalMessage(message),
-              sealApprove: (fileObjectId: string, policyObjectId: string) =>
-                this.suiBlockchainService.sealApprove(
-                  fileObjectId,
-                  policyObjectId,
-                ),
-            },
           );
 
           // Convert decrypted DTO to SubmissionData format
