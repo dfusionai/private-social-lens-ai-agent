@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JobsController } from './jobs.controller';
@@ -10,6 +10,7 @@ import { JobMonitoringService } from './services/job-monitoring.service';
 import { JobRecoveryService } from './services/job-recovery.service';
 import { NautilusModule } from '../nautilus/nautilus.module';
 import { UsersModule } from '../users/users.module';
+import { SubmissionsModule } from '../submissions/submissions.module';
 import jobConfig from './config/job.config';
 
 @Module({
@@ -19,6 +20,7 @@ import jobConfig from './config/job.config';
     RelationalJobPersistenceModule,
     NautilusModule,
     UsersModule,
+    forwardRef(() => SubmissionsModule),
   ],
   controllers: [JobsController],
   providers: [

@@ -34,6 +34,8 @@ const infrastructureDatabaseModule = TypeOrmModule.forRootAsync({
 import { ConversationsModule } from './conversations/conversations.module';
 import { MessagesModule } from './messages/messages.module';
 import { JobsModule } from './jobs/jobs.module';
+import { SubmissionsModule } from './submissions/submissions.module';
+import submissionConfig from './submissions/config/submission.config';
 
 import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-configs.module';
 
@@ -43,6 +45,7 @@ import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-co
     MessagesModule,
     ConversationsModule,
     JobsModule,
+    SubmissionsModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [
@@ -56,20 +59,40 @@ import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-co
         claudeConfig,
         ollamaConfig,
         jobConfig,
+        submissionConfig,
       ],
       envFilePath: ['.env'],
     }),
     infrastructureDatabaseModule,
     I18nModule.forRootAsync({
-      useFactory: (configService: ConfigService<AllConfigType>) => ({
-        fallbackLanguage: configService.getOrThrow('app.fallbackLanguage', {
-          infer: true,
-        }),
-        loaderOptions: {
-          path: path.join(__dirname, '/i18n/'),
-          watch: configService.get('app.i18nWatchFiles', { infer: true }),
-        },
-      }),
+      useFactory: (configService: ConfigService<AllConfigType>) => {
+        // In development, use source directory; in production, use dist directory
+        const isDevelopment =
+          configService.get('app.nodeEnv', { infer: true }) === 'development';
+        let i18nPath: string;
+        if (isDevelopment) {
+          i18nPath = path.join(process.cwd(), 'src', 'i18n');
+        } else {
+          // In production, handle both dist/ and dist/src/ structures
+          // If __dirname is dist/src, go up one level to dist/, then to i18n
+          // If __dirname is dist, go directly to i18n
+          if (__dirname.includes(path.join('dist', 'src'))) {
+            i18nPath = path.join(__dirname, '..', 'i18n');
+          } else {
+            i18nPath = path.join(__dirname, 'i18n');
+          }
+        }
+
+        return {
+          fallbackLanguage: configService.getOrThrow('app.fallbackLanguage', {
+            infer: true,
+          }),
+          loaderOptions: {
+            path: i18nPath,
+            watch: configService.get('app.i18nWatchFiles', { infer: true }),
+          },
+        };
+      },
       resolvers: [
         {
           use: HeaderResolver,

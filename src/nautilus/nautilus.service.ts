@@ -42,6 +42,7 @@ export class NautilusService {
       }
 
       const responseData = response.data;
+      this.logger.debug('responseData', JSON.stringify(responseData, null, 2));
 
       if (responseData.status !== 'success') {
         throw new Error(

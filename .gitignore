@@ -42,8 +42,11 @@ lerna-debug.log*
 CLAUDE.md
 
 /storage
+/temp
 
 # Environment files
 .env
 .env.k8s
 .env.*
+
+/dev-notes

@@ -140,4 +140,38 @@ JOB_RETRY_DELAY=60000
 TEE_PROCESS_TIMEOUT=480000 #8 minutes
 WORKER_INSTANCE_ID=worker-local-1
 
-DFUSION_VALIDATOR_API_KEY=your-dfusion-validator-api-key-here
+DFUSION_VALIDATOR_API_KEY=
+
+AZURE_STORAGE_ACCOUNT_NAME=
+AZURE_STORAGE_ACCOUNT_KEY=
+AZURE_STORAGE_CONTAINER_NAME=
+
+BATCH_CHAT_THRESHOLD=500
+BATCH_CHAT_MAX_THRESHOLD=600
+
+WALRUS_PUBLISHER_URL=
+WALRUS_PUBLISHER_JWT_SECRET=
+WALRUS_PUBLISHER_JWT_ALGORITHM=
+WALRUS_PUBLISHER_JWT_EXPIRING_SEC=
+WALRUS_QUILT_EPOCHS=
+
+VANA_BLOCKCHAIN_RPC_URL==
+VFSN_TOKEN_CONTRACT_ADDRESS=
+STAKING_CONTRACT_ADDRESS=
+
+# ID Masking (for privacy in logs and files)
+# Set a secret salt for deterministic ID masking
+# Same input always produces same masked output
+ID_MASK_SALT=change-this-to-a-secret-salt-in-production
+
+MOVE_PACKAGE_ID=your-move-package-id-here
+POLICY_OBJECT_ID=your-policy-id-here
+
+# Seal Encryption Configuration
+SEAL_KEY_SERVERS=0x7b757569e0f57c1bebcddcf934ecce4c59f668aec53ab012060e23654649efed
+SEAL_ENCRYPTION_THRESHOLD=1
+SEAL_RUBY_NODES_API_KEY=your-ruby-nodes-api-key-here
+
+# Sui Blockchain Configuration (for Seal)
+SUI_NETWORK=testnet
+SUI_SECRET_KEY=

@@ -1,11 +1,19 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  Optional,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { JobRepository } from '../infrastructure/persistence/job.repository';
 import { JobStatus } from '../enums/job-status.enum';
+import { JobType } from '../enums/job-type.enum';
 import { ConfigService } from '@nestjs/config';
 import { AllConfigType } from '../../config/config.type';
 import { JobConfig } from '../config/job-config.type';
 import { NautilusService } from '../../nautilus/nautilus.service';
 import { PgBossJob } from '../interfaces/job-data.interface';
+import { BatchDownloadService } from '../../submissions/services/batch-download.service';
 
 @Injectable()
 export class JobConsumerService {
@@ -15,6 +23,9 @@ export class JobConsumerService {
     private readonly jobRepository: JobRepository,
     private readonly configService: ConfigService<AllConfigType>,
     private readonly nautilusService: NautilusService,
+    @Optional()
+    @Inject(forwardRef(() => BatchDownloadService))
+    private readonly batchDownloadService?: BatchDownloadService,
   ) {}
 
   async processJob(jobs: PgBossJob[]): Promise<any[]> {
@@ -46,37 +57,68 @@ export class JobConsumerService {
           onchainFileId,
           policyId,
           jobType,
+          metadata,
         } = job.data;
 
         this.logger.log(
           `Processing job ${customJobId} (${job.id}) for user ${userId} with type ${jobType}`,
         );
 
-        // Update job status to processing
-        await this.updateJobStatus(customJobId, JobStatus.PROCESSING, {
-          startedAt: new Date(),
-          workerId,
-          pgBossJobId: job.id,
-        });
-
-        // Process data using Nautilus TEE service
-        const result = await this.nautilusService.processData({
-          payload: {
-            blobId,
-            onchainFileId,
-            policyId,
-          },
-        });
-
-        if (result.status !== 'success') {
-          throw new Error(`TEE processing failed: ${result.message}`);
+        // Update job status to processing (skip for batch download jobs - not tracked in job table)
+        if (jobType !== JobType.BATCH_DOWNLOAD) {
+          await this.updateJobStatus(customJobId, JobStatus.PROCESSING, {
+            startedAt: new Date(),
+            workerId,
+            pgBossJobId: job.id,
+          });
         }
 
-        // Save result and update status
-        await this.updateJobStatus(customJobId, JobStatus.COMPLETED, {
-          resultData: result.data,
-          completedAt: new Date(),
-        });
+        // Handle different job types
+        let jobResult: any;
+        if (jobType === JobType.BATCH_DOWNLOAD) {
+          if (!this.batchDownloadService) {
+            throw new Error(
+              'BatchDownloadService is not available. Make sure SubmissionsModule is imported.',
+            );
+          }
+
+          // Process batch download - fetch blobs from Azure
+          const downloadResult =
+            await this.batchDownloadService.processBatchDownload(
+              userId.toString(),
+              metadata?.batchId,
+            );
+
+          // Batch download jobs are not tracked in the job table, so skip status update
+          // Results are tracked via batch tracking and file outputs
+
+          jobResult = {
+            message: 'Batch download completed successfully',
+            submissionCount: downloadResult.submissions.length,
+            totalChats: downloadResult.totalChats,
+          };
+        } else {
+          // Process data using Nautilus TEE service
+          const result = await this.nautilusService.processData({
+            payload: {
+              blobId,
+              onchainFileId,
+              policyId,
+            },
+          });
+
+          if (result.status !== 'success') {
+            throw new Error(`TEE processing failed: ${result.message}`);
+          }
+
+          // Save result and update status
+          await this.updateJobStatus(customJobId, JobStatus.COMPLETED, {
+            resultData: result.data,
+            completedAt: new Date(),
+          });
+
+          jobResult = result.data;
+        }
 
         const duration = Date.now() - startTime;
         this.logger.log(
@@ -87,17 +129,20 @@ export class JobConsumerService {
           jobId: job.id,
           customJobId,
           success: true,
-          result: result.data,
+          result: jobResult,
           duration,
         });
       } catch (error) {
         const duration = Date.now() - startTime;
         const customJobId = job.data?.customJobId || 'unknown';
 
-        await this.updateJobStatus(customJobId, JobStatus.FAILED, {
-          errorMessage: error.message,
-          failedAt: new Date(),
-        });
+        // Update job status to failed (skip for batch download jobs - not tracked in job table)
+        if (job.data?.jobType !== JobType.BATCH_DOWNLOAD) {
+          await this.updateJobStatus(customJobId, JobStatus.FAILED, {
+            errorMessage: error.message,
+            failedAt: new Date(),
+          });
+        }
 
         this.logger.error(
           `Job ${customJobId} (${job.id}) failed after ${duration}ms:`,
@@ -160,6 +205,9 @@ export class JobConsumerService {
     additionalData: any = {},
   ): Promise<void> {
     try {
+      // Update job status in database
+      // Note: This method is only called for jobs that are tracked in the job table
+      // Batch download jobs are handled separately and skip this method
       await this.jobRepository.update(jobId, {
         status,
         ...additionalData,
