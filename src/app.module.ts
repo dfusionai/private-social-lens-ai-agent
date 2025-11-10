@@ -69,9 +69,19 @@ import { tokenGatingConfigsModule } from './token-gating-configs/token-gating-co
         // In development, use source directory; in production, use dist directory
         const isDevelopment =
           configService.get('app.nodeEnv', { infer: true }) === 'development';
-        const i18nPath = isDevelopment
-          ? path.join(process.cwd(), 'src', 'i18n')
-          : path.join(__dirname, 'i18n');
+        let i18nPath: string;
+        if (isDevelopment) {
+          i18nPath = path.join(process.cwd(), 'src', 'i18n');
+        } else {
+          // In production, handle both dist/ and dist/src/ structures
+          // If __dirname is dist/src, go up one level to dist/, then to i18n
+          // If __dirname is dist, go directly to i18n
+          if (__dirname.includes(path.join('dist', 'src'))) {
+            i18nPath = path.join(__dirname, '..', 'i18n');
+          } else {
+            i18nPath = path.join(__dirname, 'i18n');
+          }
+        }
 
         return {
           fallbackLanguage: configService.getOrThrow('app.fallbackLanguage', {
