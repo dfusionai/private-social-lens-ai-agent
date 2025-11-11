@@ -20,4 +20,5 @@ export type SubmissionConfig = {
   sealRubyNodesApiKey?: string;
   suiNetwork?: 'mainnet' | 'testnet' | 'devnet' | 'localnet';
   suiSecretKey?: string; // Bech32-encoded private key for Seal decryption
+  createSubmissionEnabled?: boolean;
 };
