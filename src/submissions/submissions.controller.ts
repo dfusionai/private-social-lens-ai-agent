@@ -15,11 +15,16 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
 import { SubmissionService } from './services/submission.service';
 import { EncryptedCreateSubmissionDto } from './dto/encrypted-create-submission.dto';
 import { UsersService } from '../users/users.service';
 import { JwtPayloadType } from '../auth/strategies/types/jwt-payload.type';
-import { UnauthorizedException } from '@nestjs/common';
+import {
+  UnauthorizedException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { AllConfigType } from '../config/config.type';
 
 @ApiTags('Submissions')
 @ApiBearerAuth()
@@ -32,6 +37,7 @@ export class SubmissionsController {
   constructor(
     private readonly submissionService: SubmissionService,
     private readonly usersService: UsersService,
+    private readonly configService: ConfigService<AllConfigType>,
   ) {}
 
   @Post()
@@ -69,11 +75,26 @@ export class SubmissionsController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'User not authenticated or user not found',
   })
+  @ApiResponse({
+    status: HttpStatus.SERVICE_UNAVAILABLE,
+    description: 'Submission creation is currently disabled',
+  })
   @HttpCode(HttpStatus.CREATED)
   async createSubmission(
     @Request() request: { user: JwtPayloadType },
     @Body() encryptedSubmissionDto: EncryptedCreateSubmissionDto,
   ): Promise<{ submissionId: string; chatCount: number }> {
+    // Check if submission creation is enabled
+    const createSubmissionEnabled = this.configService.get(
+      'submission.createSubmissionEnabled',
+      { infer: true },
+    );
+    if (createSubmissionEnabled === false) {
+      throw new ServiceUnavailableException(
+        'Submission creation is currently disabled',
+      );
+    }
+
     // Fetch the full user object to get the socialId (telegram ID)
     const user = await this.usersService.findById(request.user.id);
     if (!user) {

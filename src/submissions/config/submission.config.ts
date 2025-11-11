@@ -81,6 +81,9 @@ class EnvironmentVariablesValidator {
   @IsOptional()
   @IsString()
   SUI_SECRET_KEY?: string;
+
+  @IsOptional()
+  SUBMISSION_CREATE_ENABLED?: string;
 }
 
 export default registerAs<SubmissionConfig>('submission', () => {
@@ -126,5 +129,8 @@ export default registerAs<SubmissionConfig>('submission', () => {
         | 'localnet'
         | undefined) || 'mainnet',
     suiSecretKey: process.env.SUI_SECRET_KEY,
+    createSubmissionEnabled: process.env.SUBMISSION_CREATE_ENABLED
+      ? process.env.SUBMISSION_CREATE_ENABLED.toLowerCase() === 'true'
+      : true, // Default to enabled
   };
 });
