@@ -126,15 +126,10 @@ export class WalrusQuiltService {
 
       // Encrypt each patch blob with Seal before adding to form data
       // This matches the frontend encryption pattern
+      // NOTE: Seal encryption is ONLY used for chat blobs (patches), nothing else
       this.logger.debug(
         `Encrypting ${patches.length} patch blobs with Seal before publishing...`,
       );
-
-      // Store encryption IDs for later use when saving on-chain
-      const patchEncryptionData = new Map<
-        string,
-        { encryptionId: string; encryptedBytes: Uint8Array }
-      >();
 
       for (const patch of patches) {
         try {
@@ -149,12 +144,6 @@ export class WalrusQuiltService {
           this.logger.debug(
             `Encrypted patch ${patch.identifier} with encryption ID: ${encryptionId}`,
           );
-
-          // Store encryption data for later use
-          patchEncryptionData.set(patch.identifier, {
-            encryptionId,
-            encryptedBytes,
-          });
 
           // Add encrypted patch as a form field with identifier as field name
           // The content is now encrypted bytes instead of plain JSON
@@ -304,60 +293,50 @@ export class WalrusQuiltService {
         `Quilt published successfully. On-chain ID: ${result.quiltId}, Blob ID: ${result.quiltBlobId}, Patches: ${result.totalPatches}`,
       );
 
-      // After successful PUT request, save encrypted files on-chain
-      this.logger.log(
-        `Saving ${result.patches.length} encrypted patches on-chain...`,
-      );
-
-      // Save each encrypted patch on-chain
-      for (const patchResult of result.patches) {
-        const encryptionData = patchEncryptionData.get(patchResult.identifier);
-        if (!encryptionData) {
-          this.logger.warn(
-            `No encryption data found for patch ${patchResult.identifier}. Skipping on-chain save.`,
-          );
-          continue;
-        }
+      // After successful PUT request, save encrypted quilt on-chain (once per quilt upload)
+      // Use the blob object ID from the response (blobStoreResult.newlyCreated.blobObject.id)
+      if (onChainBlobObjectId) {
+        this.logger.log(
+          `Saving encrypted quilt on-chain (blob object ID: ${onChainBlobObjectId})...`,
+        );
 
         try {
-          // Use the encryption ID directly (already a hex string from encryptData)
-          // No need to parse EncryptedObject since we already have the encryptionId
-          const fileId = encryptionData.encryptionId;
-
-          // Create metadata similar to frontend
+          // Create metadata for the quilt
           const metadata = {
-            walrusUrl: `${submissionConfig.walrusPublisherUrl}/v1/blobs/${patchResult.quiltPatchId}`,
-            size: encryptionData.encryptedBytes.length,
+            quiltId: result.quiltId,
+            quiltBlobId: result.quiltBlobId,
+            blobObjectId: onChainBlobObjectId,
+            totalPatches: result.totalPatches,
           };
 
-          // Save encrypted file on-chain
+          // Save encrypted quilt on-chain (once per quilt upload, not per patch)
+          // Use the blob object ID directly (no encryption needed - only chat patches are encrypted)
           const onChainFileObjId =
             await this.suiBlockchainService.saveEncryptedFileOnChain(
-              fileId,
+              onChainBlobObjectId,
               submissionConfig.policyObjectId,
               metadata,
             );
 
-          // Store on-chain file object ID in result
-          patchResult.encryptionId = encryptionData.encryptionId;
-          patchResult.onChainFileObjId = onChainFileObjId;
-
-          this.logger.debug(
-            `Saved patch ${patchResult.identifier} on-chain: ${onChainFileObjId}`,
+          this.logger.log(
+            `✅ Encrypted quilt saved on-chain: ${onChainFileObjId}`,
           );
+
+          // Store the on-chain file object ID in the result
+          result.onChainFileObjId = onChainFileObjId;
         } catch (error: any) {
           this.logger.error(
-            `Failed to save patch ${patchResult.identifier} on-chain: ${error.message}`,
+            `Failed to save quilt on-chain: ${error.message}`,
             error.stack,
           );
-          // Don't throw - log error but continue with other patches
-          // The patch is still published to Walrus, just not saved on-chain
+          // Don't throw - log error but continue
+          // The quilt is still published to Walrus, just not saved on-chain
         }
+      } else {
+        this.logger.warn(
+          'No blob object ID found in response. Skipping on-chain save.',
+        );
       }
-
-      this.logger.log(
-        `Completed on-chain saves. ${result.patches.filter((p) => p.onChainFileObjId).length}/${result.patches.length} patches saved on-chain.`,
-      );
 
       return result;
     } catch (error: any) {

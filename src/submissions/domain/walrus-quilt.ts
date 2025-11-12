@@ -63,10 +63,9 @@ export interface QuiltPublishResult {
     userId: string;
     submissionId: string;
     chatId: string;
-    encryptionId?: string; // Seal encryption ID
-    onChainFileObjId?: string; // On-chain file object ID from save_encrypted_file
   }>;
   totalPatches: number;
   publishedAt: Date;
+  onChainFileObjId?: string; // On-chain file object ID from save_encrypted_file (one per quilt)
 }
 
