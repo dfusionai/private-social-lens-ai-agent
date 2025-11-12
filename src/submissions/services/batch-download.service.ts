@@ -273,21 +273,16 @@ export class BatchDownloadService {
         });
 
         // Create Nautilus job to process the quilt
-        // Only create job if all patches have been saved on-chain successfully
-        const patchesWithOnChainIds = blobStoreResult?.patches?.filter(
-          (p) => p.onChainFileObjId,
-        );
-        const allPatchesSaved =
-          patchesWithOnChainIds?.length === blobStoreResult?.patches?.length;
-
+        // Only create job if the quilt has been saved on-chain successfully
+        // (Now we save the quilt once, not individual patches)
         if (
           updatedBatch &&
           blobStoreResult?.quiltId &&
           blobStoreResult?.quiltBlobId &&
-          allPatchesSaved
+          blobStoreResult?.onChainFileObjId
         ) {
           this.logger.log(
-            `All ${patchesWithOnChainIds?.length} patches saved on-chain. Creating Nautilus job...`,
+            `Quilt saved on-chain (${blobStoreResult.onChainFileObjId}). Creating Nautilus job...`,
           );
           await this.createNautilusJob(
             userId,
@@ -300,7 +295,7 @@ export class BatchDownloadService {
           blobStoreResult?.quiltBlobId
         ) {
           this.logger.warn(
-            `Not all patches saved on-chain (${patchesWithOnChainIds?.length}/${blobStoreResult?.patches?.length}). Skipping Nautilus job creation.`,
+            `Quilt not saved on-chain. Skipping Nautilus job creation.`,
           );
         }
       } catch (error) {
