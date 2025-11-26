@@ -286,8 +286,12 @@ export class BatchDownloadService {
           );
           await this.createNautilusJob(
             userId,
-            blobStoreResult.quiltId,
+            blobStoreResult.onChainFileObjId,
             blobStoreResult.quiltBlobId,
+            batchId,
+            batch.chatCount,
+            epochs,
+            updatedBatch.quiltBlobId || blobStoreResult.quiltBlobId,
           );
         } else if (
           updatedBatch &&
@@ -339,6 +343,10 @@ export class BatchDownloadService {
     userId: string,
     onChainBlobObjectId: string,
     quiltBlobId: string,
+    batchId: string,
+    chatCount: number,
+    epochs: number,
+    batchQuiltBlobId: string,
   ): Promise<void> {
     try {
       const submissionConfig = this.configService.getOrThrow<SubmissionConfig>(
@@ -371,11 +379,17 @@ export class BatchDownloadService {
           policyId: submissionConfig.policyObjectId,
           jobType: JobType.BOTH,
           priority: 5,
+          metadata: {
+            batchId,
+            chatCount,
+            epochs,
+            quiltBlobId: batchQuiltBlobId,
+          },
         },
       );
 
       this.logger.log(
-        `Created Nautilus job ${jobId} for user ${user.id} (socialId: ${this.idMasker.maskUserId(userId)}) to process quilt ${quiltBlobId}`,
+        `Created Nautilus job ${jobId} for user ${user.id} (socialId: ${this.idMasker.maskUserId(userId)}) to process quilt ${quiltBlobId} with batch metadata (batchId: ${batchId}, chatCount: ${chatCount}, epochs: ${epochs})`,
       );
     } catch (error) {
       // Log error but don't fail the batch processing
