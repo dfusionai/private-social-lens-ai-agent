@@ -111,6 +111,16 @@ export class JobConsumerService {
             throw new Error(`TEE processing failed: ${result.message}`);
           }
 
+          // Check if the TEE operation itself failed (even if HTTP call succeeded)
+          if (
+            result.data?.result?.data?.status === 'failed' ||
+            result.data?.result?.data?.error
+          ) {
+            const errorMessage =
+              result.data?.result?.data?.error || 'TEE operation failed';
+            throw new Error(`TEE operation failed: ${errorMessage}`);
+          }
+
           // Save result and update status
           await this.updateJobStatus(customJobId, JobStatus.COMPLETED, {
             resultData: result.data,
