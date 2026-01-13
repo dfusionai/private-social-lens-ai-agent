@@ -11,8 +11,7 @@ import { AllConfigType } from '../../config/config.type';
 import { CreateSubmissionDto } from '../dto/create-submission.dto';
 import { SealClient, SessionKey, EncryptedObject } from '@mysten/seal';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
-import { fromHex, toHex } from '@mysten/sui/utils';
-import { getRandomValues } from 'crypto';
+import { toHex } from '@mysten/sui/utils';
 import { SuiBlockchainService } from './sui-blockchain.service';
 
 /**
@@ -139,15 +138,21 @@ export class SealService implements OnModuleInit {
     }
 
     try {
-      // Generate encryption ID: policyObjectId bytes + 5-byte nonce
-      // This matches the frontend pattern
-      const policyObjectBytes = fromHex(policyObjectId);
-      const nonce = getRandomValues(new Uint8Array(5));
-      const encryptionId = toHex(
-        new Uint8Array([...policyObjectBytes, ...nonce]),
-      );
+      // OPTIMIZATION: Use policyObjectId directly as encryption ID (Shared Identity pattern)
+      // This enables Seal SDK key caching - all patches with same ID share one cached key
+      // Security: Each encryption still generates unique baseKey → unique ciphertext
+      // Cost optimization: Reduces key server requests from N to 1 per quilt batch
+      //
+      // CONTRAST WITH MINER: The Miner frontend (sui-poc.service.ts) uses policyObjectId + random nonce
+      // for user submissions. This is intentional - Miner creates 1 submission per user action (not a
+      // bottleneck), while AI Agent re-encrypts N patches per quilt (this IS the bottleneck).
+      //
+      // NOTE: We use policyObjectId directly instead of policyObjectId + fixed suffix because:
+      // (1) simpler code, (2) easier debugging (ID = policyObjectId), (3) Move contract's is_prefix
+      // check passes for both exact match and prefix match. No benefit to adding suffix.
+      const encryptionId = policyObjectId;
 
-      this.logger.debug(`🔷 Seal encryption ID: ${encryptionId}`);
+      this.logger.debug(`🔷 Seal encryption ID (shared): ${encryptionId}`);
 
       // Convert data to Uint8Array
       let dataBytes: Uint8Array;
