@@ -5,9 +5,10 @@ set -e
 # /opt/wait-for-it.sh postgres:5432
 # /opt/wait-for-it.sh qdrant:6333
 # /opt/wait-for-it.sh ollama:11434
-/opt/wait-for-it.sh sui-ai-chat.postgres.database.azure.com:5432 -t 30
+: "${DATABASE_HOST:?DATABASE_HOST is required}"
+/opt/wait-for-it.sh "${DATABASE_HOST}:${DATABASE_PORT:-5432}" -t 30
 /opt/wait-for-it.sh qdrant-vector-db.happyfield-d4613d37.eastus.azurecontainerapps.io:443 -t 30
-/opt/wait-for-it.sh ollama-embedding.happyfield-d4613d37.eastus.azurecontainerapps.io:443 -t 30
+# Ollama embedding wait removed: EMBEDDING_PROVIDER=azureopenai
 
 # Setup Ollama with embedding model
 # echo "Waiting for Ollama to be ready..."
